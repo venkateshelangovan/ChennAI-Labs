@@ -22,10 +22,30 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.db.base import Base, register_models
 from app.db.session import get_db
+from app.retrieval import vector_store as vs_module
 
 register_models()
+
+
+@pytest.fixture(autouse=True)
+def isolated_vector_store(tmp_path, monkeypatch):
+    """
+    Every product create/update/archive/restore now triggers a vector
+    write (Stage 4). Without this fixture, every test in the suite
+    would share ONE on-disk Chroma collection while each test gets its
+    own fresh, autoincrement-from-1 SQLite database — product #1 in one
+    test would silently collide with product #1 in another. Autouse so
+    no test has to remember to ask for isolation; it's not opt-in
+    because forgetting it would produce flaky, order-dependent failures
+    rather than a clean error.
+    """
+    monkeypatch.setattr(settings, "vector_db_path", str(tmp_path / "chroma"))
+    vs_module._client = None
+    yield
+    vs_module._client = None
 
 
 @pytest.fixture()

@@ -6,6 +6,16 @@
   <a href="/admin/products/new" class="btn-primary" style="width:auto; padding:10px 18px; text-decoration:none;">+ New course</a>
 </div>
 
+{% if needs_sync %}
+<div class="sync-banner">
+  <span>{{ needs_sync }} product{{ "s" if needs_sync != 1 else "" }} not synced to the vector index.</span>
+  <form method="post" action="/admin/products/sync" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <button type="submit" class="link-button">Sync now</button>
+  </form>
+</div>
+{% endif %}
+
 {% if products %}
 <table class="admin-table">
   <thead>
@@ -15,6 +25,7 @@
       <th>Level</th>
       <th>Price</th>
       <th>Status</th>
+      <th>Vector sync</th>
       <th></th>
     </tr>
   </thead>
@@ -28,6 +39,12 @@
       <td>
         {% if product.status == "active" %}<span class="pill pill-active">active</span>
         {% else %}<span class="pill pill-archived">archived</span>{% endif %}
+      </td>
+      <td>
+        {% if product.status != "active" %}<span class="pill pill-archived">—</span>
+        {% elif product.vector_sync_status == "synced" %}<span class="pill pill-active">synced</span>
+        {% elif product.vector_sync_status == "failed" %}<span class="pill pill-failed">failed</span>
+        {% else %}<span class="pill pill-pending">pending</span>{% endif %}
       </td>
       <td class="admin-table-actions">
         <a href="/admin/products/{{ product.id }}/edit">Edit</a>

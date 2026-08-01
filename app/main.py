@@ -1,9 +1,9 @@
 """
 ChennAI Labs — FastAPI application entrypoint.
 
-Stage 3 adds: the products router (public catalog + admin CRUD) and a
-homepage that features real catalog data instead of a placeholder.
-Still no behavioral tracking, no vector store, no AI — those come later.
+Stage 4 adds: a vector-store reachability check on /health, alongside
+the existing database check. Still no behavioral tracking, no AI calls
+— those come later (Stage 5, Stage 9).
 """
 
 import logging
@@ -24,6 +24,7 @@ from app.core.logging import configure_logging
 from app.db.session import SessionLocal, get_db
 from app.products import service as product_service
 from app.products.routes import router as products_router
+from app.retrieval import vector_store
 from app.templating import templates
 
 configure_logging()
@@ -77,13 +78,12 @@ async def handle_not_authorized(request: Request, exc: NotAuthorized):
 @app.get("/health")
 async def health() -> JSONResponse:
     """
-    Liveness/readiness check. Now checks the database connection —
-    the first real dependency the app has. Stage 4 adds a vector-store
-    check the same way; Stage 9 adds Mesh reachability. Each dependency
-    failing shows up here individually rather than as an opaque 500
-    somewhere else in the app.
+    Liveness/readiness check. Checks the database connection and, as of
+    Stage 4, the vector store. Stage 9 adds Mesh reachability the same
+    way. Each dependency failing shows up here individually rather than
+    as an opaque 500 somewhere else in the app.
     """
-    checks = {"database": "ok"}
+    checks = {"database": "ok", "vector_store": "ok"}
     status_code = 200
     try:
         db = SessionLocal()
@@ -93,6 +93,12 @@ async def health() -> JSONResponse:
             db.close()
     except Exception as exc:  # noqa: BLE001 — deliberately broad: any DB failure means "not ready"
         checks["database"] = f"error: {exc}"
+        status_code = 503
+
+    try:
+        vector_store.health_check()
+    except Exception as exc:  # noqa: BLE001
+        checks["vector_store"] = f"error: {exc}"
         status_code = 503
 
     return JSONResponse(

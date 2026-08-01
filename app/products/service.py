@@ -12,6 +12,13 @@ semantic retrieval the recommendation engine will use starting Stage 7
 — it's "let a user type 'rag' and find the RAG course," which a vector
 index would be overkill for. Keeping this distinction explicit now
 avoids confusing "catalog search" with "personalized retrieval" later.
+
+Stage 4 addition: create/update/archive/restore each call into
+app/retrieval/sync.py AFTER their own db.commit() succeeds — SQL is
+always the write of record; the vector write is a best-effort follow-up
+that can fail without the product write itself failing (Stage 0,
+Section 9). This is "dual write," not "distributed transaction": there
+is no rollback of the SQL side if the vector side fails.
 """
 
 import re
@@ -21,6 +28,7 @@ from sqlalchemy import String, or_
 from sqlalchemy.orm import Session
 
 from app.db.models.product import Product
+from app.retrieval import sync as vector_sync
 
 VALID_LEVELS = ("beginner", "intermediate", "advanced")
 
@@ -134,6 +142,7 @@ def create_product(
     db.add(product)
     db.commit()
     db.refresh(product)
+    vector_sync.sync_product(db, product)  # SQL write already committed; this can fail independently
     return product
 
 
@@ -170,6 +179,10 @@ def update_product(
     product.image_url = (image_url or "").strip() or None
     db.commit()
     db.refresh(product)
+    # sync_product() itself decides whether this actually needs re-embedding
+    # (content_hash comparison) — editing only the price still calls this,
+    # but it's a no-op AI-cost-wise if the embedded text didn't change.
+    vector_sync.sync_product(db, product)
     return product
 
 
@@ -177,6 +190,7 @@ def archive_product(db: Session, product: Product) -> Product:
     product.status = "archived"
     db.commit()
     db.refresh(product)
+    vector_sync.remove_product(db, product)  # archived products must not be retrievable
     return product
 
 
@@ -184,6 +198,7 @@ def restore_product(db: Session, product: Product) -> Product:
     product.status = "active"
     db.commit()
     db.refresh(product)
+    vector_sync.sync_product(db, product)  # re-embed unconditionally — content_hash was cleared on archive
     return product
 
 

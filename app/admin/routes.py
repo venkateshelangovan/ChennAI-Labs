@@ -23,6 +23,7 @@ from app.core.csrf import issue_csrf_token, set_csrf_cookie, verify_csrf
 from app.db.models.user import User
 from app.db.session import get_db
 from app.products import service
+from app.retrieval import sync as vector_sync
 from app.templating import templates
 
 router = APIRouter(prefix="/admin/products")
@@ -61,14 +62,33 @@ def _parse_and_validate(
 @router.get("")
 async def list_products(request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     products = service.list_products(db, include_archived=True)
+    needs_sync = sum(1 for p in products if p.status == "active" and p.vector_sync_status != "synced")
     token = issue_csrf_token(request)
     response = templates.TemplateResponse(
         request,
         "admin/products/index.html",
-        {"products": products, "current_user": admin, "csrf_token": token},
+        {"products": products, "current_user": admin, "csrf_token": token, "needs_sync": needs_sync},
     )
     set_csrf_cookie(response, token)
     return response
+
+
+@router.post("/sync")
+async def sync_now(
+    request: Request,
+    csrf_token: str = Form(...),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Manual trigger for app/retrieval/sync.py's reconciliation sweep —
+    the repair mechanism from Stage 0 Section 9. Retries every active
+    product not currently marked 'synced' and removes any orphaned
+    vector-store entries. Not run on a schedule (see Stage 15).
+    """
+    if verify_csrf(request, csrf_token):
+        vector_sync.reconcile(db)
+    return RedirectResponse(url="/admin/products", status_code=303)
 
 
 @router.get("/new")

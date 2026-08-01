@@ -350,6 +350,26 @@ a {
 
 .pill-active { background: #e6f4ea; color: #1e7a35; }
 .pill-archived { background: #eee; color: #777; }
+.pill-failed { background: #fde3e3; color: #a3231f; }
+.pill-pending { background: #fff3d9; color: #9a6a00; }
+
+.sync-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff3d9;
+  border: 1px solid #f0d48a;
+  color: #6b4d00;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.sync-banner .link-button {
+  color: #6b4d00;
+  font-weight: 600;
+}
 
 /* Catalog page */
 
