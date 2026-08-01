@@ -86,6 +86,25 @@ def count() -> int:
     return _get_collection().count()
 
 
+def reset_collection() -> None:
+    """
+    Deletes and recreates the collection outright. Used exactly once so
+    far — scripts/reindex_all.py, Stage 9's migration when the
+    embedding provider (and therefore the vector space's dimension)
+    changes. Individual upserts can't reconcile two different
+    dimensions living in the same Chroma collection (a fresh upsert at
+    the new dimension would raise, not silently coexist with the old
+    one), so "delete everything, start empty" is the correct migration
+    here, not a workaround for a bug.
+    """
+    client = _get_client()
+    try:
+        client.delete_collection(name=COLLECTION_NAME)
+    except Exception:  # noqa: BLE001 — collection may not exist yet; either way we recreate it below
+        pass
+    _get_collection()  # recreate empty, so callers can upsert immediately after
+
+
 def get_synced_ids() -> set[int]:
     """Every product ID currently present in the vector index — used by
     the reconciliation sweep to detect drift beyond flagged failures."""

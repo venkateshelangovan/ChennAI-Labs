@@ -25,6 +25,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.db.base import Base, register_models
 from app.db.session import get_db
+from app.retrieval import embeddings as embeddings_module
 from app.retrieval import vector_store as vs_module
 
 register_models()
@@ -46,6 +47,36 @@ def isolated_vector_store(tmp_path, monkeypatch):
     vs_module._client = None
     yield
     vs_module._client = None
+
+
+@pytest.fixture(autouse=True)
+def isolated_embedding_provider():
+    """
+    Stage 9 made MeshEmbeddingProvider the default get_embedding_provider()
+    return value — a real outbound HTTP call. Without this fixture, every
+    test that creates or updates a product (the majority of the suite,
+    across nearly every test file) would attempt a real network call to
+    Mesh on every run. Force the deterministic local placeholder back as
+    the active provider for the duration of each test, the same way
+    isolated_vector_store keeps Chroma test-local: swap the module-level
+    singleton (`_provider`), not the function that returns it, so
+    `get_embedding_provider()` itself is still the one seam Mesh-specific
+    tests (tests/test_mesh_client.py, tests/test_embeddings.py) exercise
+    directly.
+
+    A plain assignment + manual restore, not monkeypatch.setattr: a few
+    existing tests (tests/test_retrieval.py's failure-simulation tests)
+    call `monkeypatch.undo()` explicitly mid-test to end a simulated
+    outage, which undoes EVERY patch made so far via that test's shared
+    monkeypatch fixture instance — including one this fixture made, if it
+    used monkeypatch, well before that test intended to touch it. Direct
+    assignment isn't tracked by monkeypatch, so it's immune to a test's
+    own unrelated `monkeypatch.undo()` call.
+    """
+    original = embeddings_module._provider
+    embeddings_module._provider = embeddings_module.LocalHashEmbeddingProvider()
+    yield
+    embeddings_module._provider = original
 
 
 @pytest.fixture()

@@ -1,37 +1,36 @@
 """
 Turning a product into text, and text into a vector.
 
-STAGE 4 vs STAGE 9 — read this before touching this file.
+STAGE 4 vs STAGE 9 — history, kept for context.
 
-This stage builds and tests the *dual-write mechanism*: does a product
+Stage 4 built and tested the *dual-write mechanism*: does a product
 write land in both SQL and the vector store, does update skip
 unnecessary re-embedding, does a vector-store failure get flagged and
 survive reconciliation, does archive remove the vector, etc. None of
-that depends on the embeddings being semantically meaningful — it only
-depends on `embed(text)` being a deterministic function from text to a
-fixed-size vector.
+that depended on the embeddings being semantically meaningful — only on
+`embed(text)` being a deterministic function from text to a fixed-size
+vector. So Stage 4 implemented `embed()` against a small interface
+(`EmbeddingProvider`) with a deterministic *local, non-AI* placeholder,
+`LocalHashEmbeddingProvider` — a bag-of-words feature-hashing vector
+(hash each token into one of N buckets, count, L2-normalize). It was
+never semantic — "RAG" and "retrieval-augmented generation" were never
+recognized as related — but it was a real vector space with a real
+distance metric, which was exactly what dual-write plumbing needed to
+be provably correct without an untested AI client smuggled in three
+stages early.
 
-The challenge requires every AI call to go through Mesh, and Mesh
-integration is explicitly Stage 9's job (a centralized, tested,
-retry-aware client). Building the real Mesh-backed embedding call here,
-three stages early, would mean either duplicating that work or having
-an untested AI client smuggled in ahead of schedule — both worse than
-the alternative: implement embed() against a small interface
-(`EmbeddingProvider`), ship a deterministic *local, non-AI* placeholder
-implementation now, and swap in a `MeshEmbeddingProvider` behind the
-same interface at Stage 9 without touching any dual-write code.
+Stage 9 is that swap: `get_embedding_provider()` now returns
+`MeshEmbeddingProvider`, and `LocalHashEmbeddingProvider` stays in the
+codebase for two reasons, not one — it's still what the test suite
+uses (see tests/conftest.py's `isolated_embedding_provider` fixture,
+which keeps every test that creates/updates a product from making a
+real network call), and it's a useful reference for what "a minimal
+EmbeddingProvider implementation" looks like.
 
-`LocalHashEmbeddingProvider` is a bag-of-words feature-hashing vector
-(hash each token into one of N buckets, count, L2-normalize). It is
-NOT semantic — "RAG" and "retrieval-augmented generation" will not be
-recognized as related. It IS a real vector space with a real distance
-metric (shared vocabulary between two texts increases cosine
-similarity), which is exactly what's needed to test that the vector
-store's upsert/query/delete plumbing works, without pretending to be
-an AI capability this stage doesn't have yet.
-
-At Stage 9, get_embedding_provider() below is the one line that
-changes.
+Nothing downstream of `get_embedding_provider()` changed —
+app/retrieval/sync.py and app/products/service.py never imported
+LocalHashEmbeddingProvider directly, which was the entire point of
+building the interface this way back in Stage 4.
 """
 
 import hashlib
@@ -39,9 +38,25 @@ import math
 import re
 from typing import Protocol
 
+from app.core.config import settings
 from app.db.models.product import Product
+from app.mesh import client as mesh_client
 
 EMBEDDING_DIMENSIONS = 256
+
+# Bumped whenever the active embedding provider (or its model) changes
+# in a way that changes the resulting vector space — Stage 9's swap
+# from the 256-dim local hash placeholder to Mesh's real embedding
+# model is the first such change. Folded into compute_content_hash so
+# a provider swap naturally invalidates every previously-computed hash
+# rather than silently leaving stale vectors marked "synced". This
+# alone isn't a full migration, though — app/retrieval/sync.py's
+# reconcile() only retries rows that AREN'T marked 'synced', so
+# products embedded under the old version and still marked 'synced'
+# need the explicit one-time sweep in scripts/reindex_all.py, which
+# also resets the vector store outright (old and new embeddings are
+# different dimensions — they can't coexist in one Chroma collection).
+EMBEDDING_SCHEMA_VERSION = "mesh-v1"
 
 
 class EmbeddingProvider(Protocol):
@@ -66,19 +81,32 @@ class LocalHashEmbeddingProvider:
         return [v / norm for v in vector]
 
 
+class MeshEmbeddingProvider:
+    """
+    Stage 9: the real embedding provider. Delegates the actual HTTP
+    call to app/mesh/client.py — this class's only job is conforming to
+    the EmbeddingProvider protocol and supplying the configured model
+    name, so app/retrieval/sync.py and everything upstream of it never
+    needs to know Mesh exists, let alone how to call it, retry it, or
+    parse its response.
+    """
+
+    def embed(self, text: str) -> list[float]:
+        return mesh_client.embed(text, model=settings.mesh_embedding_model)
+
+
 _provider: EmbeddingProvider | None = None
 
 
 def get_embedding_provider() -> EmbeddingProvider:
     """
-    The one function everything else in the codebase calls. Swapping
-    this to return a Mesh-backed provider at Stage 9 is the entire
-    migration — app/retrieval/sync.py and app/products/service.py never
-    import LocalHashEmbeddingProvider directly.
+    The one function everything else in the codebase calls. This is
+    the one line Stage 4's docstrings promised would change at Stage 9
+    — and it's the only line that did.
     """
     global _provider
     if _provider is None:
-        _provider = LocalHashEmbeddingProvider()
+        _provider = MeshEmbeddingProvider()
     return _provider
 
 
@@ -103,4 +131,5 @@ def build_embedding_text(product: Product) -> str:
 
 
 def compute_content_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    versioned = f"{EMBEDDING_SCHEMA_VERSION}:{text}"
+    return hashlib.sha256(versioned.encode("utf-8")).hexdigest()

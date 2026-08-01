@@ -4,11 +4,25 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 8 of 20 — the deterministic recommendation pipeline is live on `/dashboard`, still on placeholder (non-semantic) embeddings underneath. Mesh, grounding validation, and the agentic workflow are not built yet.**
+**Status: Stage 9 of 20 — Mesh API integration is live. `get_embedding_provider()` now returns a real, retry-aware Mesh-backed provider; the local hash placeholder only remains as the test suite's stand-in. Grounding validation and the agentic workflow are not built yet.**
 
-### A note on embeddings right now
+### Mesh API integration (Stage 9)
 
-Every product create/update/archive is dual-written to a Chroma vector store, with full failure handling and a repair sweep (see below). But the actual embedding vectors right now come from a deterministic, local, non-AI placeholder (`app/retrieval/embeddings.py`) — **not Mesh**. This is intentional, not a shortcut: Mesh integration is Stage 9's job (a proper centralized, tested, retry-aware AI client), and this stage's job is proving the dual-write mechanism itself — sync on create, skip unnecessary re-embeds on update, remove on archive, survive and recover from a simulated vector-store outage. Building an untested, ad-hoc Mesh call three stages early would be worse than a clearly-labeled placeholder behind a swappable interface. At Stage 9, `get_embedding_provider()` is the one function that changes.
+Every embedding call in this codebase goes through `app/mesh/client.py` — the *only* module allowed to call an AI provider, and Mesh the *only* provider it ever calls (never OpenAI/Anthropic/etc. directly, per the project's constraint). `MeshEmbeddingProvider` (`app/retrieval/embeddings.py`) wraps it behind the same `EmbeddingProvider` interface Stage 4 built, which is why nothing in `app/retrieval/sync.py`, `app/products/service.py`, or any stage built on top of retrieval (6, 7, 8) needed to change — `get_embedding_provider()` really was the one line Stages 4 through 8 promised would move.
+
+**An honest note on the wire contract.** `api.meshapi.ai` isn't a real, reachable service for this project — Mesh is this challenge's stand-in for "an internal/managed AI gateway," and nothing specifies its actual HTTP shape. `app/mesh/client.py` implements the contract almost every embeddings-compatible gateway uses (OpenAI's — Azure OpenAI and most proxies in front of either mirror it too): `POST {MESH_BASE_URL}/embeddings` with `{"model": ..., "input": text}`, expecting back `{"data": [{"embedding": [...]}]}`. If a real Mesh spec differs, only the request-building and response-parsing in that one file need to change.
+
+**Retry policy.** Retries only what a retry can plausibly fix — connection errors, timeouts, and 5xx responses — with exponential backoff (0.5s, 1s). A 4xx is never retried (a human/config problem, not a transient one), and a missing `MESH_API_KEY` fails immediately with no network attempt at all, for the same reason. Every failure surfaces as one `MeshAPIError`, which Stage 4's existing dual-write failure handling already catches uniformly — `sync_product` doesn't need to know or care *why* Mesh failed to do the right thing (log it, mark `vector_sync_status='failed'`, never roll back the SQL write).
+
+**Local dev without real Mesh credentials still works.** `.env.example` ships `MESH_API_KEY=` blank on purpose. Auth, the catalog, event tracking, the interest profile, and retrieval preview all function with no Mesh access at all; only product vector sync fails (gracefully, per Stage 4), and Stage 8's recommendations fall back to the popularity ranking. This emergent graceful degradation is the payoff of Stages 4–8's architecture, not something Stage 9 had to build specially.
+
+**Reindexing after a provider swap.** `compute_content_hash` now folds in `EMBEDDING_SCHEMA_VERSION`, so a future provider/model change naturally invalidates every hash going forward — but rows already marked `'synced'` under the *old* version aren't automatically caught by `reconcile()` (which, by design, only retries non-`'synced'` rows), and an old embedding's dimension is incompatible with a new provider's in the same Chroma collection. `scripts/reindex_all.py` is the explicit, one-time migration: reset the vector store outright, mark every active product `'pending'`, and run `reconcile()` to re-embed everything fresh. Deliberately manual, not automatic on deploy — re-embedding a whole catalog is a real (possibly billed) operation that should always be a human's decision.
+
+```bash
+python -m scripts.reindex_all
+```
+
+**Health check.** `/health`'s `mesh` field reports `"configured"` / `"not_configured"` based on whether an API key is present — it does **not** make a live call to Mesh. Unlike the database and vector store (free, local, cheap to check on every hit), Mesh is an external, metered API; a liveness probe that calls a billed endpoint every few seconds is a known anti-pattern. A missing/unreachable Mesh also never drops the overall status to `503` — the app is genuinely still usable without it (see above).
 
 ## Stack
 
@@ -16,7 +30,7 @@ Every product create/update/archive is dual-written to a Chroma vector store, wi
 - **Frontend:** Jinja2 server-rendered HTML + vanilla JS (behavioral tracking, added Stage 5)
 - **Database:** SQLite locally → PostgreSQL in production, via SQLAlchemy + Alembic migrations
 - **Vector store:** Chroma, embedded, persisted to `VECTOR_DB_PATH`
-- **AI:** Mesh API only (`https://api.meshapi.ai/v1`), never a direct LLM provider (Stage 9+; embeddings are a local placeholder until then — see above)
+- **AI:** Mesh API only (`https://api.meshapi.ai/v1` — a stand-in; see "Mesh API integration" below), never a direct LLM provider. Live as of Stage 9 for embeddings; LLM calls (grounding, agentic workflow) arrive Stage 10+
 
 ## Local setup
 
@@ -118,11 +132,11 @@ Every card on `/dashboard` shows its `reason` — one of two fixed, non-generate
 pytest
 ```
 
-101 tests as of Stage 8: Stage 7's suite (90) plus recommendation-pipeline coverage (11) — the diversity re-rank (cap respected, then relaxed when there's no other category to fill with), novelty exclusion, the combined "everything the user engaged with" fallback edge case, deterministic reason strings, an end-to-end diversity check against the real vector store, and `/dashboard` rendering both the personalized and popular-fallback paths.
+114 tests as of Stage 9: Stage 8's suite (101) plus Mesh integration coverage (13) — the retry-aware client (success, retry-then-succeed on both 5xx and connection errors, retry exhaustion, no-retry on a 4xx or missing API key, malformed response shape, exact request shape), and the embedding-provider wiring (Mesh is the real default, content-hash versioning changes when the schema version does). None of these tests make a real network call — see `tests/conftest.py`'s `isolated_embedding_provider` fixture and `tests/test_mesh_client.py`'s module docstring for how.
 
 ## Environment variables
 
-See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` isn't needed until Stage 9. `.env` is git-ignored and must never be committed.
+See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" above for what still works without it). `.env` is git-ignored and must never be committed.
 
 ## Project structure
 
@@ -166,10 +180,14 @@ chennai_labs/
 │   │   ├── schemas.py            # Recommendation (wraps a real Product) / RecommendationResult
 │   │   └── service.py            # generate_recommendations — novelty, diversity, popular fallback
 │   ├── retrieval/
-│   │   ├── embeddings.py        # EmbeddingProvider interface + local placeholder (Stage 9 swaps this)
-│   │   ├── vector_store.py      # thin Chroma wrapper: upsert/delete/query/health_check
+│   │   ├── embeddings.py        # EmbeddingProvider interface, MeshEmbeddingProvider (default) +
+│   │   │                         #   LocalHashEmbeddingProvider (kept as the test suite's stand-in)
+│   │   ├── vector_store.py      # thin Chroma wrapper: upsert/delete/query/reset_collection/health_check
 │   │   ├── sync.py              # dual-write mechanics: sync/remove/reconcile/detect_drift
 │   │   └── query.py             # Stage 7: profile -> query text -> embedding -> ranked candidates
+│   ├── mesh/
+│   │   └── client.py             # Stage 9: the ONLY module allowed to call an AI provider —
+│   │                              #   retry-aware Mesh HTTP client (embeddings today; LLM calls later)
 │   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, profile/, partials/)
 │   └── static/
 │       ├── css/                  # brand tokens + site nav/catalog/admin/profile styling
@@ -177,7 +195,8 @@ chennai_labs/
 ├── alembic/                    # migrations (env.py wired to app Settings)
 ├── scripts/
 │   ├── create_admin.py         # out-of-band admin provisioning
-│   └── seed_products.py        # realistic starting catalog (idempotent)
+│   ├── seed_products.py        # realistic starting catalog (idempotent)
+│   └── reindex_all.py          # Stage 9: one-time re-embed-everything migration (provider swap)
 ├── tests/
 ├── requirements.txt
 ├── .env.example

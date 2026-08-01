@@ -84,12 +84,23 @@ async def handle_not_authorized(request: Request, exc: NotAuthorized):
 @app.get("/health")
 async def health() -> JSONResponse:
     """
-    Liveness/readiness check. Checks the database connection and, as of
-    Stage 4, the vector store. Stage 9 adds Mesh reachability the same
-    way. Each dependency failing shows up here individually rather than
-    as an opaque 500 somewhere else in the app.
+    Liveness/readiness check. Checks the database connection and the
+    vector store (Stage 4) the same way — cheap, local, free to call on
+    every hit. Mesh (Stage 9) is deliberately checked differently: it's
+    an external, metered API, and a liveness probe that makes a real
+    (possibly billed) call to a third-party service on every check is a
+    known anti-pattern — a health endpoint hit every few seconds by an
+    orchestrator would otherwise burn real API quota just existing.
+    Instead this reports whether Mesh is *configured* (an API key is
+    present), not whether it's currently reachable, and — unlike the
+    database or vector store — a missing/unreachable Mesh never
+    degrades the overall status to 503: Stage 4's dual-write design
+    means the app still functions without it (products just don't sync
+    to the vector store, and Stage 8's recommendations fall back to the
+    popularity ranking), which is exactly the local-dev-without-
+    credentials case this needs to not treat as "the app is down."
     """
-    checks = {"database": "ok", "vector_store": "ok"}
+    checks = {"database": "ok", "vector_store": "ok", "mesh": "configured" if settings.mesh_api_key else "not_configured"}
     status_code = 200
     try:
         db = SessionLocal()
