@@ -7,6 +7,26 @@
   <link rel="stylesheet" href="/static/css/main.css" />
 </head>
 <body>
-  {% block content %}{% endblock %}
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a href="/" class="brand">ChennAI Labs</a>
+      <nav class="site-nav">
+        <a href="/courses">Courses</a>
+        {% if current_user %}
+          {% if current_user.role == "admin" %}<a href="/admin/products">Admin</a>{% endif %}
+          <a href="/dashboard">Dashboard</a>
+          <form method="post" action="/logout" class="nav-logout-form">
+            <button type="submit" class="link-button">Log out</button>
+          </form>
+        {% else %}
+          <a href="/login">Log in</a>
+          <a href="/register" class="nav-cta">Sign up</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main class="site-main">
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>

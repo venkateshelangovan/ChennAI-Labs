@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ product.title }} — ChennAI Labs{% endblock %}
+{% block content %}
+<div class="product-detail">
+  <div class="product-detail-main">
+    <div class="breadcrumb"><a href="/courses">Courses</a> / {{ product.category }}{% if product.subcategory %} / {{ product.subcategory }}{% endif %}</div>
+    <span class="pill pill-level pill-{{ product.level }}">{{ product.level }}</span>
+    <h1>{{ product.title }}</h1>
+    <p class="product-detail-desc">{{ product.description }}</p>
+
+    {% if product.tags %}
+    <div class="tag-list">
+      {% for tag in product.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    <dl class="product-detail-facts">
+      {% if product.instructor %}<div><dt>Instructor</dt><dd>{{ product.instructor }}</dd></div>{% endif %}
+      <div><dt>Duration</dt><dd>{{ product.duration_hours }} hours</dd></div>
+      {% if product.rating %}<div><dt>Rating</dt><dd>★ {{ product.rating }}</dd></div>{% endif %}
+    </dl>
+  </div>
+
+  <aside class="product-detail-sidebar">
+    <div class="price-card">
+      <div class="price-card-amount">₹{{ "%.0f"|format(product.price) }}</div>
+      {% if current_user %}
+      <button type="button" class="btn-primary" disabled title="Checkout isn't built yet">Enroll</button>
+      <p class="price-card-note">Enrollment/checkout isn't wired up yet — this button is a placeholder.</p>
+      {% else %}
+      <a href="/register" class="btn-primary" style="display:block; text-align:center; text-decoration:none;">Sign up to enroll</a>
+      {% endif %}
+    </div>
+  </aside>
+</div>
+{% endblock %}

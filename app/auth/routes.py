@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.auth import service
-from app.auth.dependencies import SESSION_COOKIE_NAME, require_user
+from app.auth.dependencies import SESSION_COOKIE_NAME, get_current_user, require_user
 from app.core.config import settings
 from app.core.csrf import issue_csrf_token, set_csrf_cookie, verify_csrf
 from app.db.models.user import User
@@ -29,10 +29,12 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 @router.get("/register")
-async def register_form(request: Request):
+async def register_form(request: Request, db: Session = Depends(get_db)):
     token = issue_csrf_token(request)
     response = templates.TemplateResponse(
-        request, "auth/register.html", {"errors": [], "form": {}, "csrf_token": token}
+        request,
+        "auth/register.html",
+        {"errors": [], "form": {}, "csrf_token": token, "current_user": get_current_user(request, db)},
     )
     set_csrf_cookie(response, token)
     return response
@@ -77,6 +79,7 @@ async def register_submit(
                 "errors": errors,
                 "form": {"email": email, "display_name": display_name},
                 "csrf_token": token,
+                "current_user": None,
             },
             status_code=422,
         )
@@ -100,10 +103,12 @@ async def register_submit(
 # ---------------------------------------------------------------------------
 
 @router.get("/login")
-async def login_form(request: Request):
+async def login_form(request: Request, db: Session = Depends(get_db)):
     token = issue_csrf_token(request)
     response = templates.TemplateResponse(
-        request, "auth/login.html", {"errors": [], "form": {}, "csrf_token": token}
+        request,
+        "auth/login.html",
+        {"errors": [], "form": {}, "csrf_token": token, "current_user": get_current_user(request, db)},
     )
     set_csrf_cookie(response, token)
     return response
@@ -133,7 +138,7 @@ async def login_submit(
         response = templates.TemplateResponse(
             request,
             "auth/login.html",
-            {"errors": errors, "form": {"email": email}, "csrf_token": token},
+            {"errors": errors, "form": {"email": email}, "csrf_token": token, "current_user": None},
             status_code=422,
         )
         set_csrf_cookie(response, token)
@@ -171,4 +176,4 @@ async def logout(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/dashboard")
 async def dashboard(request: Request, user: User = Depends(require_user)):
-    return templates.TemplateResponse(request, "dashboard.html", {"user": user})
+    return templates.TemplateResponse(request, "dashboard.html", {"user": user, "current_user": user})

@@ -1,17 +1,29 @@
 {% extends "base.html" %}
-{% block title %}ChennAI Labs — under construction{% endblock %}
+{% from "partials/product_card.html" import product_card %}
+{% block title %}ChennAI Labs — Engineering the next generation of AI builders{% endblock %}
 {% block content %}
-<main style="max-width: 640px; margin: 15vh auto; padding: 0 24px; text-align: center;">
-  <h1 style="color: var(--color-primary); font-size: 2rem;">ChennAI Labs</h1>
-  <p style="color: #555;">
-    Engineering the next generation of AI builders.<br />
-    The catalog and recommendation experience are being built stage by stage —
-    auth is live now, so you can create an account.
-  </p>
+<section class="hero">
+  <h1>Engineering the next generation of AI builders.</h1>
   <p>
-    <a href="/register" class="btn-primary" style="display:inline-block; width:auto; text-decoration:none; padding:10px 20px; margin-right:8px;">Create account</a>
-    <a href="/login">Log in</a>
+    DSA and MAANG interview prep, the math that actually underlies ML, and a full
+    applied-AI ladder — deep learning, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG,
+    and fine-tuning. Built to adapt to what you're actually learning, not a static list.
   </p>
-  <p style="font-size: 0.85rem; color: #999;">Stage 2 of 20 — database &amp; authentication.</p>
-</main>
+  <div class="hero-actions">
+    <a href="/courses" class="btn-primary hero-btn">Browse the catalog</a>
+    {% if not current_user %}<a href="/register" class="hero-link">Create a free account</a>{% endif %}
+  </div>
+</section>
+
+{% if featured_products %}
+<section class="home-section">
+  <div class="home-section-header">
+    <h2>Explore the catalog</h2>
+    <a href="/courses">See all courses →</a>
+  </div>
+  <div class="product-grid">
+    {% for product in featured_products %}{{ product_card(product) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

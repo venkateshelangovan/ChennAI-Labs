@@ -118,3 +118,459 @@ a {
   margin: 0;
   padding-left: 18px;
 }
+
+/* ---------------------------------------------------------------------
+   Stage 3: site nav, homepage, catalog, product detail, admin CRUD.
+   Still not the Stage 18 final-polish pass — this is "looks like a
+   real product," not "pixel-perfect design system."
+--------------------------------------------------------------------- */
+
+.site-header {
+  border-bottom: 1px solid #e7e4dd;
+  background: #fff;
+}
+
+.site-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 0.92rem;
+}
+
+.site-nav a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--color-primary);
+}
+
+.nav-cta {
+  background: var(--color-primary);
+  color: #fff !important;
+  padding: 7px 14px;
+  border-radius: 6px;
+}
+
+.nav-logout-form {
+  display: inline;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-button-danger {
+  color: #8a1f1f;
+}
+
+.site-main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* Homepage hero */
+
+.hero {
+  max-width: 720px;
+  margin: 6vh auto 56px;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 2.25rem;
+  color: var(--color-primary);
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.hero p {
+  color: #555;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.hero-actions {
+  margin-top: 24px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+}
+
+.hero-btn {
+  display: inline-block;
+  width: auto;
+  padding: 12px 28px;
+  text-decoration: none;
+}
+
+.hero-link {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.home-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 20px;
+}
+
+.home-section-header h2 {
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.home-section-header a {
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+/* Product grid + card */
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.product-card {
+  display: block;
+  background: #fff;
+  border: 1px solid #e7e4dd;
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.product-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.product-card-thumb {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-primary), #4a45a8);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: 0.05em;
+}
+
+.product-card-body {
+  padding: 16px;
+}
+
+.product-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.product-card-category {
+  font-size: 0.78rem;
+  color: #8a8578;
+}
+
+.product-card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: var(--color-text);
+}
+
+.product-card-desc {
+  font-size: 0.88rem;
+  color: #666;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+
+.product-card-footer {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.product-card-price {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.product-card-rating {
+  color: #b8860b;
+}
+
+/* Pills / badges */
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.pill-level.pill-beginner { background: #e6f4ea; color: #1e7a35; }
+.pill-level.pill-intermediate { background: #fff3d9; color: #9a6a00; }
+.pill-level.pill-advanced { background: #fde3e3; color: #a3231f; }
+
+.pill-active { background: #e6f4ea; color: #1e7a35; }
+.pill-archived { background: #eee; color: #777; }
+
+/* Catalog page */
+
+.catalog-header h1 {
+  color: var(--color-primary);
+  margin-bottom: 16px;
+}
+
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.catalog-search {
+  flex: 1 1 260px;
+  padding: 10px 12px;
+  border: 1px solid #d8d4cb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.catalog-filters select {
+  padding: 10px 12px;
+  border: 1px solid #d8d4cb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.catalog-filter-btn {
+  width: auto;
+  padding: 10px 20px;
+}
+
+/* Empty state */
+
+.empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  color: #777;
+}
+
+.empty-state h3 {
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+/* Product detail */
+
+.product-detail {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 40px;
+  align-items: start;
+}
+
+.breadcrumb {
+  font-size: 0.85rem;
+  color: #8a8578;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.product-detail h1 {
+  color: var(--color-primary);
+  margin: 12px 0 16px;
+}
+
+.product-detail-desc {
+  color: #444;
+  line-height: 1.65;
+  white-space: pre-line;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.tag {
+  background: #efece3;
+  color: #555;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.product-detail-facts {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.product-detail-facts dt {
+  font-size: 0.78rem;
+  color: #8a8578;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.product-detail-facts dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.price-card {
+  border: 1px solid #e7e4dd;
+  border-radius: 12px;
+  padding: 24px;
+  background: #fff;
+  position: sticky;
+  top: 24px;
+}
+
+.price-card-amount {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: 16px;
+}
+
+.price-card-note {
+  font-size: 0.78rem;
+  color: #8a8578;
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  .product-detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Admin */
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.admin-header h1 {
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e7e4dd;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.admin-table th {
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #8a8578;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e7e4dd;
+}
+
+.admin-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0eee7;
+  font-size: 0.9rem;
+}
+
+.admin-table-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.inline-form {
+  display: inline;
+}
+
+.admin-form-shell {
+  max-width: 640px;
+}
+
+.admin-form-shell h1 {
+  color: var(--color-primary);
+  margin: 12px 0 20px;
+}
+
+.admin-form .field-row {
+  display: flex;
+  gap: 16px;
+}
+
+.admin-form .field-row .field {
+  flex: 1;
+}
+
+.admin-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d8d4cb;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.admin-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d8d4cb;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #fff;
+}

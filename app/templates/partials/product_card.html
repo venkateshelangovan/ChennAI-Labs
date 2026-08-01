@@ -1,0 +1,24 @@
+{# Shared product card, used on both the homepage and the catalog grid.
+   One macro instead of duplicated markup in two templates means a
+   future styling change (or, later, a "why recommended" badge) only
+   has to happen in one place. #}
+{% macro product_card(product) %}
+<a href="/courses/{{ product.slug }}" class="product-card">
+  <div class="product-card-thumb" data-category="{{ product.category }}">
+    <span>{{ product.category[:2].upper() }}</span>
+  </div>
+  <div class="product-card-body">
+    <div class="product-card-meta">
+      <span class="pill pill-level pill-{{ product.level }}">{{ product.level }}</span>
+      <span class="product-card-category">{{ product.category }}</span>
+    </div>
+    <h3>{{ product.title }}</h3>
+    <p class="product-card-desc">{{ product.description[:110] }}{% if product.description|length > 110 %}…{% endif %}</p>
+    <div class="product-card-footer">
+      <span class="product-card-price">₹{{ "%.0f"|format(product.price) }}</span>
+      <span class="product-card-duration">{{ product.duration_hours }}h</span>
+      {% if product.rating %}<span class="product-card-rating">★ {{ product.rating }}</span>{% endif %}
+    </div>
+  </div>
+</a>
+{% endmacro %}

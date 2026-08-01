@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "partials/product_card.html" import product_card %}
+{% block title %}Courses — ChennAI Labs{% endblock %}
+{% block content %}
+<section class="catalog-header">
+  <h1>Courses</h1>
+  <form method="get" action="/courses" class="catalog-filters">
+    <input
+      type="text" name="q" placeholder="Search courses, e.g. \"RAG\" or \"system design\""
+      value="{{ filters.q }}" class="catalog-search"
+    />
+    <select name="category">
+      <option value="">All categories</option>
+      {% for c in categories %}
+      <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <select name="level">
+      <option value="">All levels</option>
+      <option value="beginner" {% if filters.level == "beginner" %}selected{% endif %}>Beginner</option>
+      <option value="intermediate" {% if filters.level == "intermediate" %}selected{% endif %}>Intermediate</option>
+      <option value="advanced" {% if filters.level == "advanced" %}selected{% endif %}>Advanced</option>
+    </select>
+    <button type="submit" class="btn-primary catalog-filter-btn">Filter</button>
+  </form>
+</section>
+
+{% if products %}
+<div class="product-grid">
+  {% for product in products %}{{ product_card(product) }}{% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <h3>No courses match that search</h3>
+  <p>Try clearing a filter or searching a broader term.</p>
+  <a href="/courses">Reset filters</a>
+</div>
+{% endif %}
+{% endblock %}

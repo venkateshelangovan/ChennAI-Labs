@@ -1,25 +1,29 @@
 """
 ChennAI Labs — FastAPI application entrypoint.
 
-Stage 2 adds: the database dependency check on /health, the auth router
-(register/login/logout/dashboard), and exception handlers that turn the
-two auth exceptions (NotAuthenticated, NotAuthorized) into real HTTP
-responses. Still no catalog, no tracking, no AI — those come later.
+Stage 3 adds: the products router (public catalog + admin CRUD) and a
+homepage that features real catalog data instead of a placeholder.
+Still no behavioral tracking, no vector store, no AI — those come later.
 """
 
 import logging
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
+from app.admin.routes import router as admin_router
+from app.auth.dependencies import get_current_user
 from app.auth.routes import router as auth_router
 from app.core.config import settings
 from app.core.exceptions import NotAuthenticated, NotAuthorized
 from app.core.logging import configure_logging
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, get_db
+from app.products import service as product_service
+from app.products.routes import router as products_router
 from app.templating import templates
 
 configure_logging()
@@ -30,6 +34,8 @@ app = FastAPI(title=settings.app_name)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(auth_router)
+app.include_router(products_router)
+app.include_router(admin_router)
 
 
 @app.middleware("http")
@@ -101,5 +107,9 @@ async def health() -> JSONResponse:
 
 
 @app.get("/")
-async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+async def index(request: Request, db: Session = Depends(get_db)):
+    featured = product_service.list_products(db)[:6]
+    current_user = get_current_user(request, db)
+    return templates.TemplateResponse(
+        request, "index.html", {"featured_products": featured, "current_user": current_user}
+    )

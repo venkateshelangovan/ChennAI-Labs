@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 2 of 20 — database & authentication. Catalog, tracking, retrieval, and the recommendation engine are not built yet.**
+**Status: Stage 3 of 20 — product catalog. Behavioral tracking, retrieval, and the recommendation engine are not built yet.**
 
 ## Stack
 
@@ -30,6 +30,9 @@ cp .env.example .env   # edit values as needed; defaults work for local dev
 
 # Create the database schema
 alembic upgrade head
+
+# Load a realistic starting catalog (16 courses, safe to re-run)
+python -m scripts.seed_products
 ```
 
 ## Running the server
@@ -40,11 +43,13 @@ uvicorn app.main:app --reload
 
 Then visit:
 
-- `http://127.0.0.1:8000/` — homepage, links to register/login
-- `http://127.0.0.1:8000/health` — liveness check; now also confirms the DB is reachable
-- `http://127.0.0.1:8000/register` — create an account
-- `http://127.0.0.1:8000/login` — log in
+- `http://127.0.0.1:8000/` — homepage: hero + featured courses
+- `http://127.0.0.1:8000/courses` — browse/search/filter the catalog (`?q=`, `?category=`, `?level=`)
+- `http://127.0.0.1:8000/courses/<slug>` — course detail page
+- `http://127.0.0.1:8000/health` — liveness check; confirms the DB is reachable
+- `http://127.0.0.1:8000/register` / `/login` — auth
 - `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated
+- `http://127.0.0.1:8000/admin/products` — admin catalog management (requires an admin account — see below); redirects non-authenticated visitors to `/login`, returns 403 for a logged-in non-admin
 
 ## Creating an admin account
 
@@ -71,7 +76,7 @@ alembic revision --autogenerate -m "add products"  # after changing a model
 pytest
 ```
 
-22 tests as of Stage 2: password hashing, registration (incl. duplicate email, short password), login (incl. wrong password), session issuance/expiry/revocation, the `require_user`/`require_admin` role dependencies, CSRF rejection, and the full HTTP register → dashboard → logout flow.
+38 tests as of Stage 3: Stage 2's auth suite (22) plus catalog coverage (16) — slug generation/uniqueness, search/filter, archive/restore (soft delete), admin CRUD over HTTP with CSRF, price/duration validation, and confirming a regular (non-admin) user gets a 403 on every `/admin/products/*` route while an anonymous visitor gets redirected to `/login`.
 
 ## Environment variables
 
@@ -99,11 +104,17 @@ chennai_labs/
 │   │   ├── service.py          # register/authenticate/session logic (no HTTP)
 │   │   ├── dependencies.py     # get_current_user, require_user, require_admin
 │   │   └── routes.py           # register/login/logout/dashboard HTTP handlers
-│   ├── templates/              # Jinja2 (auth/, dashboard.html, index.html, base.html)
-│   └── static/css/             # brand tokens + auth-form styling
+│   ├── products/
+│   │   ├── service.py           # catalog CRUD, slug generation, search/filter
+│   │   └── routes.py            # public /courses browse + detail
+│   ├── admin/
+│   │   └── routes.py            # /admin/products CRUD, gated by require_admin
+│   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, partials/)
+│   └── static/css/              # brand tokens + site nav/catalog/admin styling
 ├── alembic/                    # migrations (env.py wired to app Settings)
 ├── scripts/
-│   └── create_admin.py         # out-of-band admin provisioning
+│   ├── create_admin.py         # out-of-band admin provisioning
+│   └── seed_products.py        # realistic starting catalog (idempotent)
 ├── tests/
 ├── requirements.txt
 ├── .env.example

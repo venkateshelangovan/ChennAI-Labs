@@ -15,4 +15,4 @@ class Base(DeclarativeBase):
 
 def register_models() -> None:
     """Import every model module for its side effect of registering on Base.metadata."""
-    from app.db.models import user, auth_session  # noqa: F401
+    from app.db.models import user, auth_session, product  # noqa: F401
