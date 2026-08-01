@@ -1,0 +1,120 @@
+/*
+  Brand tokens only, per Stage 0 design language. Real page styling
+  (catalog, product cards, recommendation panel) is built starting
+  Stage 3 and polished at Stage 18 — this file just seeds the palette
+  so every later template can reference the same variables instead of
+  hardcoding colors.
+*/
+:root {
+  --color-primary: #2E2A72;   /* deep indigo */
+  --color-accent: #F2A93B;    /* warm amber */
+  --color-bg: #F7F6F3;
+  --color-text: #1A1A1A;
+  --font-ui: "Inter", system-ui, -apple-system, sans-serif;
+  --font-narrative: "Source Serif 4", Georgia, serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+a {
+  color: var(--color-primary);
+}
+
+/* Stage 2: minimal auth-form styling. Real design-system work happens
+   in Stage 18 — this just keeps the login/register screens from
+   looking like an unstyled HTML form while we build the rest. */
+
+.auth-shell {
+  max-width: 420px;
+  margin: 10vh auto;
+  padding: 0 24px;
+}
+
+.auth-card {
+  background: #fff;
+  border: 1px solid #e7e4dd;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.auth-card h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  color: var(--color-primary);
+}
+
+.auth-card p.subtitle {
+  margin: 0 0 24px;
+  color: #767267;
+  font-size: 0.9rem;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d8d4cb;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.field input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+}
+
+.auth-switch {
+  margin-top: 20px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #767267;
+}
+
+.error-list {
+  background: #fdecec;
+  border: 1px solid #f3b9b9;
+  color: #8a1f1f;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.error-list ul {
+  margin: 0;
+  padding-left: 18px;
+}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ChennAI Labs{% endblock %}
+{% block content %}
+<div class="auth-shell">
+  <div class="auth-card">
+    <h1>Welcome, {{ user.display_name }}</h1>
+    <p class="subtitle">{{ user.email }} · role: {{ user.role }}</p>
+    <p style="color:#555; font-size:0.9rem;">
+      This is a placeholder — the real dashboard (catalog, personalized
+      recommendations) is built in later stages. Right now it exists to
+      prove <code>require_user</code> actually gates access: you only
+      see this because you have a valid session.
+    </p>
+    <form method="post" action="/logout">
+      <button type="submit" class="btn-primary" style="background:#767267;">Log out</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

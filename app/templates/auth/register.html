@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Create your account — ChennAI Labs{% endblock %}
+{% block content %}
+<div class="auth-shell">
+  <div class="auth-card">
+    <h1>Create your account</h1>
+    <p class="subtitle">Start with DSA, math for ML, or jump straight into agentic AI — your call.</p>
+
+    {% if errors %}
+    <div class="error-list">
+      <ul>
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/register">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <div class="field">
+        <label for="display_name">Name</label>
+        <input type="text" id="display_name" name="display_name" value="{{ form.display_name or '' }}" required />
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{{ form.email or '' }}" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" minlength="8" required />
+      </div>
+      <div class="field">
+        <label for="confirm_password">Confirm password</label>
+        <input type="password" id="confirm_password" name="confirm_password" minlength="8" required />
+      </div>
+      <button type="submit" class="btn-primary">Create account</button>
+    </form>
+
+    <p class="auth-switch">Already have an account? <a href="/login">Log in</a></p>
+  </div>
+</div>
+{% endblock %}

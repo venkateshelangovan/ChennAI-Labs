@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Log in — ChennAI Labs{% endblock %}
+{% block content %}
+<div class="auth-shell">
+  <div class="auth-card">
+    <h1>Welcome back</h1>
+    <p class="subtitle">Pick up where you left off.</p>
+
+    {% if errors %}
+    <div class="error-list">
+      <ul>
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{{ form.email or '' }}" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required />
+      </div>
+      <button type="submit" class="btn-primary">Log in</button>
+    </form>
+
+    <p class="auth-switch">New here? <a href="/register">Create an account</a></p>
+  </div>
+</div>
+{% endblock %}

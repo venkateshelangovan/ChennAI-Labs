@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Local data stores (Stage 2+ / Stage 4+)
+*.db
+*.sqlite3
+.chroma/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
