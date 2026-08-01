@@ -5,15 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}ChennAI Labs{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/main.css" />
+  <script src="/static/js/tracker.js" defer></script>
 </head>
-<body>
+<body {% block body_attrs %}{% endblock %}>
   <header class="site-header">
     <div class="site-header-inner">
       <a href="/" class="brand">ChennAI Labs</a>
       <nav class="site-nav">
         <a href="/courses">Courses</a>
         {% if current_user %}
-          {% if current_user.role == "admin" %}<a href="/admin/products">Admin</a>{% endif %}
+          {% if current_user.role == "admin" %}
+          <a href="/admin/products">Admin</a>
+          <a href="/admin/events">Events</a>
+          {% endif %}
           <a href="/dashboard">Dashboard</a>
           <form method="post" action="/logout" class="nav-logout-form">
             <button type="submit" class="link-button">Log out</button>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ product.title }} — ChennAI Labs{% endblock %}
+{% block body_attrs %}data-product-id="{{ product.id }}" data-track-source="detail"{% endblock %}
 {% block content %}
 <div class="product-detail">
   <div class="product-detail-main">

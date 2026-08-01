@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% from "partials/product_card.html" import product_card %}
 {% block title %}Courses — ChennAI Labs{% endblock %}
+{% block body_attrs %}
+  {%- if filters.q %} data-search-query="{{ filters.q }}" data-result-count="{{ products|length }}"{% endif -%}
+  {%- if filters.category %} data-category="{{ filters.category }}"{% endif -%}
+{% endblock %}
 {% block content %}
 <section class="catalog-header">
   <h1>Courses</h1>
@@ -26,7 +30,7 @@
 </section>
 
 {% if products %}
-<div class="product-grid">
+<div class="product-grid" data-track-source="catalog">
   {% for product in products %}{{ product_card(product) }}{% endfor %}
 </div>
 {% else %}

@@ -3,7 +3,7 @@
    future styling change (or, later, a "why recommended" badge) only
    has to happen in one place. #}
 {% macro product_card(product) %}
-<a href="/courses/{{ product.slug }}" class="product-card">
+<a href="/courses/{{ product.slug }}" class="product-card" data-track-click="view" data-product-id="{{ product.id }}">
   <div class="product-card-thumb" data-category="{{ product.category }}">
     <span>{{ product.category[:2].upper() }}</span>
   </div>

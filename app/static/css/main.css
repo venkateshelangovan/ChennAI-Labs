@@ -371,6 +371,18 @@ a {
   font-weight: 600;
 }
 
+.event-total {
+  font-size: 0.85rem;
+  color: #8a8578;
+}
+
+.pill-event { background: #eee; color: #444; }
+.pill-event-view { background: #e6f0fd; color: #1a4fa0; }
+.pill-event-click { background: #e6f4ea; color: #1e7a35; }
+.pill-event-search { background: #f3e6fd; color: #6a1ba0; }
+.pill-event-category_view { background: #fdf1e6; color: #a05a1a; }
+.pill-event-time_spent { background: #fff3d9; color: #9a6a00; }
+
 /* Catalog page */
 
 .catalog-header h1 {

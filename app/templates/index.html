@@ -21,7 +21,7 @@
     <h2>Explore the catalog</h2>
     <a href="/courses">See all courses →</a>
   </div>
-  <div class="product-grid">
+  <div class="product-grid" data-track-source="home">
     {% for product in featured_products %}{{ product_card(product) }}{% endfor %}
   </div>
 </section>

@@ -19,6 +19,8 @@ from app.core.config import settings
 from app.core.csrf import issue_csrf_token, set_csrf_cookie, verify_csrf
 from app.db.models.user import User
 from app.db.session import get_db
+from app.events.schemas import TRACKING_SESSION_COOKIE
+from app.events.service import reconcile_session
 from app.templating import templates
 
 router = APIRouter()
@@ -87,6 +89,10 @@ async def register_submit(
         return response
 
     session = service.create_session(db, user)
+    # Attach any behavior this browser generated before registering
+    # (Stage 0, Journey 1) — reads the tracker's cookie, not a form
+    # field, since it needs to work even if JS never touched this form.
+    reconcile_session(db, request.cookies.get(TRACKING_SESSION_COOKIE), user.id)
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
         SESSION_COOKIE_NAME,
@@ -145,6 +151,7 @@ async def login_submit(
         return response
 
     session = service.create_session(db, user)
+    reconcile_session(db, request.cookies.get(TRACKING_SESSION_COOKIE), user.id)
     response = RedirectResponse(url="/dashboard", status_code=303)
     response.set_cookie(
         SESSION_COOKIE_NAME,
