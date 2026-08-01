@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}My interests — ChennAI Labs{% endblock %}
+{% block content %}
+<div class="admin-header">
+  <h1>Your interest profile</h1>
+  <span class="event-total">{{ profile.sample_size }} event{{ "s" if profile.sample_size != 1 else "" }} behind this</span>
+</div>
+
+<p class="profile-explainer">
+  Built from your own browsing — views, clicks, searches, time spent, category
+  browsing — weighted by how strong each signal is and how recently it
+  happened (interest fades on roughly a two-week half-life, never all the
+  way to zero). No AI involved yet: this is arithmetic over your own
+  history, not a model's guess about you.
+</p>
+
+{% if profile.is_cold_start %}
+<div class="empty-state">
+  <h3>Nothing here yet</h3>
+  <p>Browse the <a href="/courses">catalog</a> a bit — open a few course pages, try a search — and this page fills in.</p>
+</div>
+{% else %}
+
+{% if profile.category_scores %}
+<h2 class="profile-section-title">Category affinity</h2>
+<div class="profile-bars">
+  {% for c in profile.category_scores %}
+  <div class="profile-bar-row">
+    <div class="profile-bar-label">
+      <span>{{ c.category }}</span>
+      <span class="profile-bar-meta">{{ (c.score * 100) | round(1) }}% · {{ c.evidence_count }} event{{ "s" if c.evidence_count != 1 else "" }}</span>
+    </div>
+    <div class="profile-bar-track">
+      <div class="profile-bar-fill" style="width: {{ (c.score * 100) | round(1) }}%;"></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if profile.top_products %}
+<h2 class="profile-section-title">Courses you've engaged with most</h2>
+<table class="admin-table profile-table">
+  <thead>
+    <tr><th>Course</th><th>Category</th><th>Relative signal</th><th>Events</th></tr>
+  </thead>
+  <tbody>
+    {% for p in profile.top_products %}
+    <tr>
+      <td><a href="/courses/{{ p.slug }}">{{ p.title }}</a></td>
+      <td>{{ p.category }}</td>
+      <td>{{ (p.relative_score * 100) | round(0) }}%</td>
+      <td>{{ p.evidence_count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if profile.tag_scores %}
+<h2 class="profile-section-title">Topics</h2>
+<div class="tag-list profile-tag-list">
+  {% for t in profile.tag_scores %}
+  <span class="tag">{{ t.tag }} · {{ (t.score * 100) | round(1) }}%</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if profile.search_terms %}
+<h2 class="profile-section-title">Recent searches</h2>
+<ul class="profile-search-list">
+  {% for s in profile.search_terms %}
+  <li>&ldquo;{{ s.query }}&rdquo; — {{ s.count }} time{{ "s" if s.count != 1 else "" }}, last {{ s.last_searched_at.strftime("%Y-%m-%d") }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% endif %}
+{% endblock %}

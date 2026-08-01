@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 5 of 20 — behavioral tracking. Interest profiling, real retrieval, and the recommendation engine are not built yet.**
+**Status: Stage 6 of 20 — deterministic interest profiling. Real (semantic) retrieval and the recommendation engine are not built yet.**
 
 ### A note on embeddings right now
 
@@ -55,6 +55,7 @@ Then visit:
 - `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated
 - `http://127.0.0.1:8000/admin/products` — admin catalog management (requires an admin account — see below); redirects non-authenticated visitors to `/login`, returns 403 for a logged-in non-admin. Each row shows a "Vector sync" status (synced/pending/failed); a banner with a "Sync now" button appears if anything needs (re)syncing
 - `http://127.0.0.1:8000/admin/events` — behavioral event debug view (admin-only): every captured view/search/click/category_view/time_spent event, newest first, filterable by type
+- `http://127.0.0.1:8000/profile` — your own interest profile (requires login): category affinity, top engaged-with courses, topics, and recent searches, each traceable back to the formula that produced it
 
 ## Creating an admin account
 
@@ -83,13 +84,23 @@ Every product create/update/archive/restore writes to SQL first (source of truth
 
 `app/static/js/tracker.js` captures `view`, `search`, `click`, `category_view`, and `time_spent` events client-side, batches them in memory (flushed on a size threshold, a 5s timer, or immediately before any navigation-causing action like a product click), and delivers them via `navigator.sendBeacon` (falling back to a `keepalive` fetch with one bounded retry) so tracking never blocks the page or the user. Every event carries a client-generated `session_id` (persisted in `localStorage` + a first-party cookie) so behavior is captured even before someone registers; logging in or registering reconciles that session's prior anonymous events onto the new account. Each event also carries a client-generated `client_event_id`, which `POST /api/events` deduplicates on — a resent/duplicate beacon is silently absorbed, not double-counted. See `/admin/events` to watch it happening live.
 
+## Interest profiling
+
+`app/profile/service.py` turns the raw `user_events` table into a deterministic "interest profile" — no AI, no embeddings, just arithmetic that's fully reproducible from the same rows. Every qualifying event contributes `base_weight(event_type) * recency_decay(event)` to one or more targets:
+
+- **Event weights**: click (2.0) > category_view (1.5) > view (1.0); `time_spent` scales with dwell time instead of a flat weight, capped at 240s so an idle open tab can't dominate the profile. `search` contributes no category/tag weight at all — mapping free text to a category without real semantic search would be a fake signal, so queries are preserved verbatim (`search_terms`) for Stage 7 to use once it can do that safely.
+- **Recency decay**: an exponential half-life (14 days) — older behavior fades but is never hard-cut the way a fixed lookback window would, so a user who goes quiet for a month and comes back still gets a profile instead of a blank one.
+- **Aggregation targets**: category (normalized to sum to 1.0 — "relative share of attention"), tag (same, weight split evenly across a product's tags), and per-product ("top products," normalized against the user's single strongest signal), plus a deduplicated, most-recent-first list of raw search queries.
+
+See it for yourself at `/profile` once logged in — every number on that page traces back to this one function, run over your own event rows.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-69 tests as of Stage 5: Stage 4's suite (53) plus event-tracking coverage (16) — batched ingestion, **duplicate-event handling** (both within one batch and across two separate requests, simulating a resent beacon), rejecting unknown event types and product-required events with no valid product without failing the rest of the batch, session-to-user reconciliation on register/login, and confirming the debug view is gated by `require_admin` like everything else under `/admin`.
+82 tests as of Stage 6: Stage 5's suite (69) plus interest-profile coverage (13) — event-type weighting (click outweighs view in the expected ratio), recency decay (halves at exactly one half-life), time_spent capping, category/tag normalization, per-user isolation (one user's events never leak into another's profile), search-term dedup/casing, the `top_products` limit, cold-start handling, and that `/profile` is gated by `require_user` and actually renders the computed scores.
 
 ## Environment variables
 
@@ -129,13 +140,17 @@ chennai_labs/
 │   │   ├── schemas.py           # EventIn/EventBatchIn, batch size cap
 │   │   ├── service.py           # ingest_events (validate/dedup/insert), reconcile_session
 │   │   └── routes.py            # POST /api/events — the tracker's only backend endpoint
+│   ├── profile/
+│   │   ├── schemas.py            # InterestProfile value objects (CategoryScore, TagScore, ...)
+│   │   ├── service.py            # build_interest_profile — deterministic event aggregation
+│   │   └── routes.py             # GET /profile — the inspectable interest-profile page
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface + local placeholder (Stage 9 swaps this)
 │   │   ├── vector_store.py      # thin Chroma wrapper: upsert/delete/query/health_check
 │   │   └── sync.py              # dual-write mechanics: sync/remove/reconcile/detect_drift
-│   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, partials/)
+│   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, profile/, partials/)
 │   └── static/
-│       ├── css/                  # brand tokens + site nav/catalog/admin styling
+│       ├── css/                  # brand tokens + site nav/catalog/admin/profile styling
 │       └── js/tracker.js         # non-blocking behavioral event capture (see below)
 ├── alembic/                    # migrations (env.py wired to app Settings)
 ├── scripts/

@@ -606,3 +606,65 @@ a {
   font-size: 1rem;
   background: #fff;
 }
+
+/* Stage 6: interest profile */
+
+.profile-explainer {
+  color: #767267;
+  font-size: 0.9rem;
+  max-width: 640px;
+  margin-bottom: 32px;
+  line-height: 1.55;
+}
+
+.profile-section-title {
+  color: var(--color-primary);
+  font-size: 1.1rem;
+  margin: 0 0 16px;
+}
+
+.profile-bars {
+  margin-bottom: 36px;
+}
+
+.profile-bar-row {
+  margin-bottom: 12px;
+}
+
+.profile-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  margin-bottom: 5px;
+}
+
+.profile-bar-meta {
+  color: #8a8578;
+}
+
+.profile-bar-track {
+  background: #efece3;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.profile-bar-fill {
+  background: var(--color-primary);
+  height: 100%;
+}
+
+.profile-table {
+  margin-bottom: 36px;
+}
+
+.profile-tag-list {
+  margin-bottom: 36px;
+}
+
+.profile-search-list {
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  padding-left: 18px;
+}

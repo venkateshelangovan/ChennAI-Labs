@@ -26,6 +26,7 @@ from app.db.session import SessionLocal, get_db
 from app.events.routes import router as events_router
 from app.products import service as product_service
 from app.products.routes import router as products_router
+from app.profile.routes import router as profile_router
 from app.retrieval import vector_store
 from app.templating import templates
 
@@ -41,6 +42,7 @@ app.include_router(products_router)
 app.include_router(admin_router)
 app.include_router(admin_events_router)
 app.include_router(events_router)
+app.include_router(profile_router)
 
 
 @app.middleware("http")

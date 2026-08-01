@@ -11,6 +11,7 @@ venv/
 
 # Local data stores (Stage 2+ / Stage 4+)
 *.db
+*.db-journal
 *.sqlite3
 .chroma/
 
