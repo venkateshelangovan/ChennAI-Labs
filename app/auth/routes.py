@@ -21,6 +21,7 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.events.schemas import TRACKING_SESSION_COOKIE
 from app.events.service import reconcile_session
+from app.recommendations.service import generate_recommendations
 from app.templating import templates
 
 router = APIRouter()
@@ -177,10 +178,16 @@ async def logout(request: Request, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# A minimal protected page, to prove `require_user` actually gates access.
-# The real post-login experience (recommendations) arrives at Stage 13.
+# The logged-in landing page. Originally a placeholder that existed only
+# to prove `require_user` gates access (Stage 2) — Stage 8 replaces that
+# placeholder with the real output of the recommendation pipeline. The
+# gating itself hasn't changed; this route just has something worth
+# gating now.
 # ---------------------------------------------------------------------------
 
 @router.get("/dashboard")
-async def dashboard(request: Request, user: User = Depends(require_user)):
-    return templates.TemplateResponse(request, "dashboard.html", {"user": user, "current_user": user})
+async def dashboard(request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)):
+    recommendations = generate_recommendations(db, user.id)
+    return templates.TemplateResponse(
+        request, "dashboard.html", {"user": user, "current_user": user, "recommendations": recommendations}
+    )

@@ -1,23 +1,41 @@
 {% extends "base.html" %}
+{% from "partials/product_card.html" import product_card %}
 {% block title %}Dashboard — ChennAI Labs{% endblock %}
 {% block content %}
-<div class="auth-shell">
-  <div class="auth-card">
-    <h1>Welcome, {{ user.display_name }}</h1>
-    <p class="subtitle">{{ user.email }} · role: {{ user.role }}</p>
-    <p style="color:#555; font-size:0.9rem;">
-      This is a placeholder — the real dashboard (catalog, personalized
-      recommendations) is built in later stages. Right now it exists to
-      prove <code>require_user</code> actually gates access: you only
-      see this because you have a valid session.
-    </p>
-    <p style="color:#555; font-size:0.9rem;">
-      Curious what the app has learned from your browsing so far?
-      See your <a href="/profile">interest profile</a>.
-    </p>
-    <form method="post" action="/logout">
-      <button type="submit" class="btn-primary" style="background:#767267;">Log out</button>
-    </form>
-  </div>
+<div class="dashboard-greeting">
+  <h1>Welcome, {{ user.display_name }}</h1>
+  <p class="subtitle">{{ user.email }} · role: {{ user.role }}</p>
 </div>
+
+<div class="home-section-header">
+  <h2>Recommended for you</h2>
+  <a href="/profile">Why these? See your interest profile →</a>
+</div>
+
+{% if recommendations.strategy == "popular_fallback" %}
+<p class="profile-explainer">
+  {{ recommendations.recommendations[0].reason if recommendations.recommendations else "We don't have enough of your activity yet for personalized picks." }}
+  Browse the <a href="/courses">catalog</a> a bit and this list becomes personalized.
+</p>
+{% endif %}
+
+{% if recommendations.recommendations %}
+<div class="product-grid" data-track-source="recommendations">
+  {% for rec in recommendations.recommendations %}
+  <div class="recommend-card">
+    {{ product_card(rec.product) }}
+    <p class="recommend-reason">{{ rec.reason }}</p>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <h3>Nothing to recommend yet</h3>
+  <p>The catalog doesn't have any active courses to show. Check back soon.</p>
+</div>
+{% endif %}
+
+<form method="post" action="/logout" class="dashboard-logout">
+  <button type="submit" class="btn-primary" style="background:#767267; width:auto; padding:10px 24px;">Log out</button>
+</form>
 {% endblock %}

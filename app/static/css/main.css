@@ -708,3 +708,36 @@ a {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Stage 8: dashboard recommendations */
+
+.dashboard-greeting {
+  margin-bottom: 32px;
+}
+
+.dashboard-greeting h1 {
+  color: var(--color-primary);
+  margin: 0 0 4px;
+}
+
+.dashboard-greeting .subtitle {
+  color: #767267;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.recommend-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.recommend-reason {
+  margin: 10px 2px 0;
+  font-size: 0.8rem;
+  color: #8a8578;
+  font-style: italic;
+}
+
+.dashboard-logout {
+  margin-top: 40px;
+}

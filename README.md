@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 7 of 20 — retrieval plumbing over the vector store, still on placeholder (non-semantic) embeddings. The recommendation engine (ranking, novelty, business rules) is not built yet.**
+**Status: Stage 8 of 20 — the deterministic recommendation pipeline is live on `/dashboard`, still on placeholder (non-semantic) embeddings underneath. Mesh, grounding validation, and the agentic workflow are not built yet.**
 
 ### A note on embeddings right now
 
@@ -52,7 +52,7 @@ Then visit:
 - `http://127.0.0.1:8000/courses/<slug>` — course detail page
 - `http://127.0.0.1:8000/health` — liveness check; confirms the DB and vector store are both reachable
 - `http://127.0.0.1:8000/register` / `/login` — auth
-- `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated
+- `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated. As of Stage 8, this is the real "Recommended for you" list from `app/recommendations/service.py`, not a placeholder
 - `http://127.0.0.1:8000/admin/products` — admin catalog management (requires an admin account — see below); redirects non-authenticated visitors to `/login`, returns 403 for a logged-in non-admin. Each row shows a "Vector sync" status (synced/pending/failed); a banner with a "Sync now" button appears if anything needs (re)syncing
 - `http://127.0.0.1:8000/admin/events` — behavioral event debug view (admin-only): every captured view/search/click/category_view/time_spent event, newest first, filterable by type
 - `http://127.0.0.1:8000/profile` — your own interest profile (requires login): category affinity, top engaged-with courses, topics, and recent searches, plus (Stage 7) a "retrieval preview" showing the exact query text and ranked candidates a similarity search over the catalog returns right now — everything traceable back to the formula that produced it
@@ -102,13 +102,23 @@ Because the placeholder embedder is bag-of-words (a token's weight is how often 
 
 This is explicitly **not** the recommendation engine (Stage 8) — no ranking beyond raw distance, no novelty/diversity logic, no "already purchased" filtering. It's retrieval in isolation, visible at `/profile`'s "Retrieval preview" section (query text + ranked candidates, clearly labeled as not real recommendations yet) so each layer can be verified independently.
 
+## Recommendation pipeline (Stage 8)
+
+`app/recommendations/service.py` turns Stage 7's raw retrieval candidates into the actual list rendered on `/dashboard`. Three deterministic rules, no AI:
+
+- **Novelty** — products the user has already viewed, clicked, or spent time on are excluded. Stage 7's query is built out of exactly that engagement, so without this the #1 "recommendation" is routinely the course the user just clicked — a correct nearest neighbor, not a useful suggestion.
+- **Diversity** — no more than `MAX_PER_CATEGORY` (2) results from the same category, via a greedy re-rank that only relaxes the cap if there aren't enough other categories in the candidate pool to fill the list otherwise.
+- **Cold start** — a user with no behavioral signal (or one whose only retrieval candidates are things they've already engaged with) gets a deterministic, non-personalized fallback: highest-rated active courses, diversified the same way. The same fallback correctly excludes already-engaged products too, so it never turns around and recommends the one course a user has clicked just because the personalized path came up empty.
+
+Every card on `/dashboard` shows its `reason` — one of two fixed, non-generated templates ("Matches your recent interest in {category}" or the popularity-fallback explanation), never text written about the user. Compare `/dashboard`'s final list against `/profile`'s raw, unfiltered retrieval preview to see exactly what novelty + diversity changed.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-90 tests as of Stage 7: Stage 6's suite (82) plus retrieval coverage (8) — query-text token weighting, end-to-end ranking (a same-category course ranks above an unrelated one), the `status: active` metadata filter as defense in depth against vector-index drift, `top_k` limiting, the empty-vector-store edge case, and the `/profile` retrieval preview rendering.
+101 tests as of Stage 8: Stage 7's suite (90) plus recommendation-pipeline coverage (11) — the diversity re-rank (cap respected, then relaxed when there's no other category to fill with), novelty exclusion, the combined "everything the user engaged with" fallback edge case, deterministic reason strings, an end-to-end diversity check against the real vector store, and `/dashboard` rendering both the personalized and popular-fallback paths.
 
 ## Environment variables
 
@@ -152,6 +162,9 @@ chennai_labs/
 │   │   ├── schemas.py            # InterestProfile value objects (CategoryScore, TagScore, ...)
 │   │   ├── service.py            # build_interest_profile — deterministic event aggregation
 │   │   └── routes.py             # GET /profile — the inspectable interest-profile page
+│   ├── recommendations/
+│   │   ├── schemas.py            # Recommendation (wraps a real Product) / RecommendationResult
+│   │   └── service.py            # generate_recommendations — novelty, diversity, popular fallback
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface + local placeholder (Stage 9 swaps this)
 │   │   ├── vector_store.py      # thin Chroma wrapper: upsert/delete/query/health_check
