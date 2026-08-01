@@ -668,3 +668,43 @@ a {
   line-height: 1.8;
   padding-left: 18px;
 }
+
+/* Stage 7: retrieval preview */
+
+.profile-caveat-pill {
+  display: inline-block;
+  background: #fdf1e6;
+  color: #a05a1a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 10px;
+}
+
+.profile-query-text {
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.profile-query-text summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.profile-query-text code {
+  display: block;
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: #f3f1ea;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

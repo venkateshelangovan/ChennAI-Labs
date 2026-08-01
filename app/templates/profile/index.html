@@ -75,5 +75,46 @@
 </ul>
 {% endif %}
 
+{% if not retrieval.is_cold_start %}
+<h2 class="profile-section-title">
+  Retrieval preview
+  <span class="profile-caveat-pill">not real recommendations yet</span>
+</h2>
+<p class="profile-explainer">
+  This is what a similarity search over the catalog returns right now,
+  built from the query text below (generated from your profile above).
+  It's <strong>not</strong> a recommendation — there's no ranking logic,
+  novelty, or business rules on top of it yet (that's Stage 8), and the
+  embeddings themselves are still a local, non-semantic placeholder
+  (Stage 9 swaps in Mesh). Treat this as proof the retrieval plumbing
+  works, not as picks worth trusting yet.
+</p>
+<details class="profile-query-text">
+  <summary>Query text sent to the embedding provider</summary>
+  <code>{{ retrieval.query_text }}</code>
+</details>
+{% if retrieval.candidates %}
+<table class="admin-table profile-table">
+  <thead>
+    <tr><th>Course</th><th>Category</th><th>Similarity</th></tr>
+  </thead>
+  <tbody>
+    {% for c in retrieval.candidates %}
+    <tr>
+      <td><a href="/courses/{{ c.slug }}">{{ c.title }}</a></td>
+      <td>{{ c.category }}</td>
+      <td>{{ (c.similarity * 100) | round(1) }}%</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <h3>Nothing indexed yet</h3>
+  <p>The vector store doesn't have any active courses synced. See <a href="/admin/products">Admin</a> for the "Sync now" action.</p>
+</div>
+{% endif %}
+{% endif %}
+
 {% endif %}
 {% endblock %}

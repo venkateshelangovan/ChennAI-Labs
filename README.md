@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 6 of 20 — deterministic interest profiling. Real (semantic) retrieval and the recommendation engine are not built yet.**
+**Status: Stage 7 of 20 — retrieval plumbing over the vector store, still on placeholder (non-semantic) embeddings. The recommendation engine (ranking, novelty, business rules) is not built yet.**
 
 ### A note on embeddings right now
 
@@ -55,7 +55,7 @@ Then visit:
 - `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated
 - `http://127.0.0.1:8000/admin/products` — admin catalog management (requires an admin account — see below); redirects non-authenticated visitors to `/login`, returns 403 for a logged-in non-admin. Each row shows a "Vector sync" status (synced/pending/failed); a banner with a "Sync now" button appears if anything needs (re)syncing
 - `http://127.0.0.1:8000/admin/events` — behavioral event debug view (admin-only): every captured view/search/click/category_view/time_spent event, newest first, filterable by type
-- `http://127.0.0.1:8000/profile` — your own interest profile (requires login): category affinity, top engaged-with courses, topics, and recent searches, each traceable back to the formula that produced it
+- `http://127.0.0.1:8000/profile` — your own interest profile (requires login): category affinity, top engaged-with courses, topics, and recent searches, plus (Stage 7) a "retrieval preview" showing the exact query text and ranked candidates a similarity search over the catalog returns right now — everything traceable back to the formula that produced it
 
 ## Creating an admin account
 
@@ -94,13 +94,21 @@ Every product create/update/archive/restore writes to SQL first (source of truth
 
 See it for yourself at `/profile` once logged in — every number on that page traces back to this one function, run over your own event rows.
 
+## Retrieval (Stage 7)
+
+`app/retrieval/query.py` turns an interest profile into a ranked list of candidate products by querying the Stage 4 vector store — the real retrieval plumbing (profile → query text → embedding → vector search → ranked candidates), built and tested end to end, but still running on `LocalHashEmbeddingProvider`'s non-semantic placeholder embeddings until Stage 9. That means today's ranking is driven by shared vocabulary, not meaning — "RAG" and "retrieval-augmented generation" won't be recognized as related yet. This is deliberate: it proves every piece of the pipeline works in isolation, so swapping in Mesh at Stage 9 is a one-line change to `get_embedding_provider()`, not a simultaneous "does retrieval work AND does Mesh work" debugging session.
+
+Because the placeholder embedder is bag-of-words (a token's weight is how often it appears), the profile is turned into a query by repeating each category/tag token a number of times proportional to its normalized score — the closest a frequency-counting embedder can get to "respect these weights." Similarity is computed as `1 - distance/2`, an exact conversion from Chroma's L2 distance given that both product and query embeddings are unit-normalized.
+
+This is explicitly **not** the recommendation engine (Stage 8) — no ranking beyond raw distance, no novelty/diversity logic, no "already purchased" filtering. It's retrieval in isolation, visible at `/profile`'s "Retrieval preview" section (query text + ranked candidates, clearly labeled as not real recommendations yet) so each layer can be verified independently.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-82 tests as of Stage 6: Stage 5's suite (69) plus interest-profile coverage (13) — event-type weighting (click outweighs view in the expected ratio), recency decay (halves at exactly one half-life), time_spent capping, category/tag normalization, per-user isolation (one user's events never leak into another's profile), search-term dedup/casing, the `top_products` limit, cold-start handling, and that `/profile` is gated by `require_user` and actually renders the computed scores.
+90 tests as of Stage 7: Stage 6's suite (82) plus retrieval coverage (8) — query-text token weighting, end-to-end ranking (a same-category course ranks above an unrelated one), the `status: active` metadata filter as defense in depth against vector-index drift, `top_k` limiting, the empty-vector-store edge case, and the `/profile` retrieval preview rendering.
 
 ## Environment variables
 
@@ -147,7 +155,8 @@ chennai_labs/
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface + local placeholder (Stage 9 swaps this)
 │   │   ├── vector_store.py      # thin Chroma wrapper: upsert/delete/query/health_check
-│   │   └── sync.py              # dual-write mechanics: sync/remove/reconcile/detect_drift
+│   │   ├── sync.py              # dual-write mechanics: sync/remove/reconcile/detect_drift
+│   │   └── query.py             # Stage 7: profile -> query text -> embedding -> ranked candidates
 │   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, profile/, partials/)
 │   └── static/
 │       ├── css/                  # brand tokens + site nav/catalog/admin/profile styling
