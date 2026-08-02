@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 13 of 20 — recommendation UX polish is live: the AI narration renders in the design language's intended serif font (loaded for the first time), personalized cards show a real match percentage, a Personalized/Popular badge makes the cold-start transition visible, and the manual refresh action has a proper loading state. No business logic changed — everything shown was already computed by Stages 8-12.**
+**Status: Stage 14 of 20 — observability is live. Every recommendation generation now writes a full trace (retrieval attempts, the real candidate pool with scores, raw pre-validation Mesh narration output, any rejected citations) onto its `RecommendationSnapshot` row and emits a structured `recommendation_generated` log line — both answer "why did this user get this recommendation" without recomputing anything. `/admin/recommendations` surfaces it per user (Journey 3).**
 
 ### Mesh API integration (Stage 9)
 
@@ -79,6 +79,7 @@ Then visit:
 - `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated. As of Stage 8, this is the real "Recommended for you" list from `app/recommendations/service.py`, not a placeholder
 - `http://127.0.0.1:8000/admin/products` — admin catalog management (requires an admin account — see below); redirects non-authenticated visitors to `/login`, returns 403 for a logged-in non-admin. Each row shows a "Vector sync" status (synced/pending/failed); a banner with a "Sync now" button appears if anything needs (re)syncing
 - `http://127.0.0.1:8000/admin/events` — behavioral event debug view (admin-only): every captured view/search/click/category_view/time_spent event, newest first, filterable by type
+- `http://127.0.0.1:8000/admin/recommendations` — behavior & recommendations view (admin-only, Stage 14): every user with a generated recommendation, linking to a per-user full trace (retrieval attempts, candidate pool with scores, raw narration output, rejected citations, recent events)
 - `http://127.0.0.1:8000/profile` — your own interest profile (requires login): category affinity, top engaged-with courses, topics, and recent searches, plus (Stage 7) a "retrieval preview" showing the exact query text and ranked candidates a similarity search over the catalog returns right now — everything traceable back to the formula that produced it
 
 ## Creating an admin account
@@ -184,13 +185,23 @@ Scoped narrowly to the dashboard/recommendation experience on purpose — Stage 
 
 Live-verified against the real seeded catalog and mock Mesh server: the font stylesheet link resolves with the correct `family=Inter...Source+Serif+4...` query string, and a real personalized dashboard render showed genuine match badges (`79% match`, `74% match`, `73% match`, taken directly from that user's actual retrieval similarity scores) alongside the `Personalized` badge and the serif-styled narration text.
 
+## Observability (Stage 14)
+
+Stage 0 Section 17's ask: "we can answer 'why did this user get this recommendation' from logs alone," plus a `trace` JSON blob stored on the row itself — "because logs rotate and the audit trail shouldn't." Both halves are now real.
+
+**The trace, captured at generation time, never reconstructed after the fact.** `RecommendationResult.trace` (`app/recommendations/schemas.py`) is populated by `app/recommendations/service.py` on every code path — cold start, no retrieval candidates, all candidates already engaged, personalized — with Stage 11's full retrieval-attempt history (per attempt: refined?, candidate count, top similarity, quality verdict, the actual query text) and the winning attempt's raw candidate pool (every product considered, with its real similarity score, not just the ones that made the final cut). `app/recommendations/narration.py`'s `NarrationResult` gained `raw_text` (Mesh's exact output before citation substitution) and `rejected_citations` (which `[n]` indices, if any, failed grounding validation) — trace-only fields, never sent to a template a real user sees. `app/recommendations/cache.py` merges both into `RecommendationSnapshot.trace` at the same moment it persists the ranking decision, and logs a structured `recommendation_generated` line (`snapshot_id`, `user_id`, `strategy`, `trigger_reason`, `latency_ms`, ...) — logs for real-time debugging, the persisted trace for after-the-fact inspection, both written from the same call so they can't drift into two different stories about the same event.
+
+**The admin view (Journey 3).** `/admin/recommendations` lists every user with a generated recommendation (strategy, trigger reason, narration grounding, generated-at); `/admin/recommendations/{user_id}` is the full trace for one user — the retrieval-attempts table, the full candidate pool with each product's similarity and whether it was excluded for already being engaged with, the narration's raw pre-validation text and any rejected citations, and that user's recent raw events alongside it, all read directly off the `RecommendationSnapshot` row rather than recomputed — Section 17's explicit "surfaced directly," not "answered fresh," which could legitimately differ from what the user actually saw.
+
+Live-verified against the real seeded catalog and mock Mesh server: a personalized user's trace showed real candidate similarities (`79%`, `74%`, `73%`, `73%`, `72%`) pulled straight from that request's actual retrieval. A hallucination scenario (a product retitled to trigger the mock server's citation-`[99]` response, engineered via the real `product_service` write path so novelty exclusion wouldn't strip it from the candidate pool) showed up in the admin trace exactly as it happened: raw Mesh output `"You should definitely check out [99], it's fantastic and not in your list at all."`, fallback reason `ungrounded_citation`, and a `99` pill under "Rejected citations" — none of which ever reached that user's actual dashboard.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-162 tests as of Stage 13 (unchanged count from Stage 12 — this stage extended existing dashboard-rendering assertions with the new UI markers rather than adding new test functions): Stage 11's suite (143) plus 19 covering the trigger + cache — `tests/test_trigger.py`'s deterministic decision logic (no snapshot, fresh, stale-with/without-signal, manual refresh with/without cooldown, events before the snapshot don't count as new signal), and `tests/test_cache.py`'s end-to-end integration tests, which assert actual CALL COUNTS on `generate_recommendations`/`generate_narration` (not just final content) to prove a cache hit really does skip the expensive pipeline — plus a live-Product-refetch test (a cached recommendation reflects a price change made after the snapshot) and an all-cached-products-archived fallback test.
+173 tests as of Stage 14: Stage 13's suite (162, unchanged from Stage 12 — Stage 13 only extended existing dashboard-rendering assertions with new UI markers) plus 11 covering trace capture and the admin view — every `generate_recommendations` code path populates the trace correctly (cold start, personalized with a real candidate pool, all-candidates-engaged), `generate_narration` records both the grounded and hallucinated raw-output/rejected-citations cases, and the admin routes are access-controlled and render real snapshot/trace data (plus the no-snapshot and unknown-user edge cases). Stage 12 contributed 19 of those 162: `tests/test_trigger.py`'s deterministic decision logic and `tests/test_cache.py`'s call-count assertions proving a cache hit really does skip the expensive pipeline.
 
 ## Environment variables
 
@@ -224,8 +235,9 @@ chennai_labs/
 │   │   │                         #   dual-write orchestration (calls app/retrieval)
 │   │   └── routes.py            # public /courses browse + detail
 │   ├── admin/
-│   │   ├── routes.py            # /admin/products CRUD + manual "Sync now", gated by require_admin
-│   │   └── events_routes.py     # /admin/events debug view, gated by require_admin
+│   │   ├── routes.py                    # /admin/products CRUD + manual "Sync now", gated by require_admin
+│   │   ├── events_routes.py             # /admin/events debug view, gated by require_admin
+│   │   └── recommendations_routes.py    # Stage 14: /admin/recommendations — Journey 3's "behavior & recommendations" view
 │   ├── events/
 │   │   ├── schemas.py           # EventIn/EventBatchIn, batch size cap
 │   │   ├── service.py           # ingest_events (validate/dedup/insert), reconcile_session
@@ -250,7 +262,7 @@ chennai_labs/
 │   ├── mesh/
 │   │   └── client.py             # the ONLY module allowed to call an AI provider —
 │   │                              #   retry-aware Mesh HTTP client: embed() (Stage 9), chat() (Stage 10)
-│   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, profile/, partials/)
+│   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, admin/recommendations/, profile/, partials/)
 │   └── static/
 │       ├── css/                  # brand tokens + site nav/catalog/admin/profile styling
 │       └── js/tracker.js         # non-blocking behavioral event capture (see below)

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Recommendations — ChennAI Labs Admin{% endblock %}
+{% block content %}
+<div class="admin-header">
+  <h1>Behavior &amp; recommendations</h1>
+  <span class="event-total">{{ rows|length }} user{{ "s" if rows|length != 1 else "" }} with a recommendation</span>
+</div>
+
+{% if rows %}
+<table class="admin-table">
+  <thead>
+    <tr>
+      <th>User</th>
+      <th>Strategy</th>
+      <th>Trigger reason</th>
+      <th>Narration</th>
+      <th>Generated</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for snapshot, user in rows %}
+    <tr>
+      <td>{{ user.display_name }}<br /><span style="color:#8a8578; font-size:0.8rem;">{{ user.email }}</span></td>
+      <td>
+        {% if snapshot.strategy == "personalized" %}
+        <span class="pill pill-active">personalized</span>
+        {% else %}
+        <span class="pill pill-pending">popular fallback</span>
+        {% endif %}
+      </td>
+      <td style="font-size:0.85rem;">{{ snapshot.trigger_reason }}</td>
+      <td>
+        {% if snapshot.narration_grounded %}
+        <span class="pill pill-active">grounded</span>
+        {% elif snapshot.narration_fallback_reason %}
+        <span class="pill pill-failed">{{ snapshot.narration_fallback_reason }}</span>
+        {% else %}
+        <span style="color:#8a8578;">—</span>
+        {% endif %}
+      </td>
+      <td style="white-space:nowrap; font-size:0.8rem; color:#8a8578;">{{ snapshot.generated_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td><a href="/admin/recommendations/{{ user.id }}">View trace →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <h3>No recommendations generated yet</h3>
+  <p>Once a user visits their dashboard, their recommendation and its full trace show up here.</p>
+</div>
+{% endif %}
+{% endblock %}

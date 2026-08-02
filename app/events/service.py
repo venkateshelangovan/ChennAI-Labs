@@ -115,10 +115,18 @@ def reconcile_session(db: Session, session_id: str | None, user_id: int) -> int:
     return updated
 
 
-def list_recent_events(db: Session, *, event_type: str | None = None, limit: int = 100) -> list[UserEvent]:
+def list_recent_events(
+    db: Session, *, event_type: str | None = None, user_id: int | None = None, limit: int = 100
+) -> list[UserEvent]:
     query = db.query(UserEvent).order_by(UserEvent.created_at.desc())
     if event_type:
         query = query.filter(UserEvent.event_type == event_type)
+    if user_id is not None:
+        # Stage 14: the admin "behavior & recommendations" view (Journey
+        # 3) needs one user's own event history alongside their
+        # recommendation trace — same underlying query /admin/events
+        # already made, just scoped down rather than duplicated.
+        query = query.filter(UserEvent.user_id == user_id)
     return query.limit(limit).all()
 
 

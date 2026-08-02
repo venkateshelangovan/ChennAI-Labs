@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.admin.events_routes import router as admin_events_router
+from app.admin.recommendations_routes import router as admin_recommendations_router
 from app.admin.routes import router as admin_router
 from app.auth.dependencies import get_current_user
 from app.auth.routes import router as auth_router
@@ -41,6 +42,7 @@ app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(admin_router)
 app.include_router(admin_events_router)
+app.include_router(admin_recommendations_router)
 app.include_router(events_router)
 app.include_router(profile_router)
 

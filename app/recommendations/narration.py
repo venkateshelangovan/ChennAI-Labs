@@ -43,13 +43,24 @@ title (from our own data, not the model's text) before the narration
 is ever shown — a user should never see raw citation-bracket syntax in
 their UI, and this substitution is also a second, independent proof
 that a passed-validation citation really does resolve to a real course.
+
+--- Stage 14: NarrationResult also keeps the receipts ---
+
+`raw_text` and `rejected_citations` exist purely for
+app/recommendations/cache.py to persist into a `RecommendationSnapshot`'s
+trace — Stage 0 Section 17's explicit ask for "the raw LLM output before
+validation, which IDs if any were rejected" to be inspectable from the
+admin UI (Stage 14), not just from logs that eventually rotate. Neither
+field is ever sent to a template a real user sees; `text` (the
+validated, substituted version, or None) remains the only field the
+dashboard reads, completely unchanged from Stage 10.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.core.config import settings
 from app.mesh import client as mesh_client
@@ -77,6 +88,8 @@ class NarrationResult:
     text: str | None  # None whenever narration isn't shown — always a safe, valid state
     grounded: bool
     fallback_reason: str | None  # "no_recommendations" | "mesh_error" | "ungrounded_citation" | None
+    raw_text: str | None = None  # Stage 14: Mesh's exact output before substitution — trace-only, never shown
+    rejected_citations: list[int] = field(default_factory=list)  # Stage 14: which [n] indices failed validation
 
 
 def _build_messages(recommendations: list[Recommendation]) -> list[dict]:
@@ -90,9 +103,17 @@ def _build_messages(recommendations: list[Recommendation]) -> list[dict]:
     ]
 
 
-def _validate_grounding(text: str, recommendations: list[Recommendation]) -> bool:
+def _find_invalid_citations(text: str, recommendations: list[Recommendation]) -> list[int]:
+    """Every cited number that falls outside 1..len(recommendations) —
+    Stage 14 needs the actual offending numbers for the trace, not just
+    a yes/no. Order preserved, duplicates kept, exactly as they appeared
+    in the model's output."""
     citations = [int(n) for n in CITATION_PATTERN.findall(text)]
-    return all(1 <= n <= len(recommendations) for n in citations)
+    return [n for n in citations if not (1 <= n <= len(recommendations))]
+
+
+def _validate_grounding(text: str, recommendations: list[Recommendation]) -> bool:
+    return not _find_invalid_citations(text, recommendations)
 
 
 def _substitute_citations(text: str, recommendations: list[Recommendation]) -> str:
@@ -119,9 +140,16 @@ def generate_narration(recommendations: list[Recommendation]) -> NarrationResult
         return NarrationResult(text=None, grounded=False, fallback_reason="mesh_error")
 
     text = raw_text.strip()
-    if not _validate_grounding(text, recommendations):
-        logger.warning("narration_ungrounded", extra={"text": text})
-        return NarrationResult(text=None, grounded=False, fallback_reason="ungrounded_citation")
+    invalid_citations = _find_invalid_citations(text, recommendations)
+    if invalid_citations:
+        logger.warning("narration_ungrounded", extra={"text": text, "rejected_citations": invalid_citations})
+        return NarrationResult(
+            text=None,
+            grounded=False,
+            fallback_reason="ungrounded_citation",
+            raw_text=text,
+            rejected_citations=invalid_citations,
+        )
 
     display_text = _substitute_citations(text, recommendations)
-    return NarrationResult(text=display_text, grounded=True, fallback_reason=None)
+    return NarrationResult(text=display_text, grounded=True, fallback_reason=None, raw_text=text)

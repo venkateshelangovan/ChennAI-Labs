@@ -9,11 +9,15 @@ pattern Section 14 warns against. A user who reloads their dashboard
 five times in a minute has not generated five times as much genuine
 behavioral signal.
 
-One row per user (`user_id` is unique, not a history table) — Stage 14
-is where an audit trail / trace blob is planned; until then, "the
-current cached recommendation" is all this needs to represent, and a
-history table with no reader would just be unused rows accumulating
-forever.
+One row per user (`user_id` is unique, not a history table) — an audit
+TRAIL (every past recommendation ever generated) isn't what Stage 14
+builds; the ask (Stage 0 Section 17) is a full TRACE per recommendation
+("why did this user get this recommendation," answerable from the row
+alone), and the current row already regenerates on every trigger fire,
+which is exactly when a fresh trace is worth having. A history table
+with no reader would just be unused rows accumulating forever — if a
+real audit trail is ever needed, that's a distinct, larger feature than
+what Section 17 actually asks for here.
 
 What's cached vs. what's always read live: `recommendations` stores
 only the RANKING DECISION — which product IDs, in what order, with
@@ -32,6 +36,16 @@ already handle — see app/recommendations/cache.py.
 so a cache hit doesn't have to re-derive whether the narration is safe
 to show — the earlier grounding validation already decided that once,
 at generation time.
+
+Stage 14 adds `trigger_reason` (why THIS generation happened — see
+app/recommendations/trigger.py's TriggerDecision) and `trace` (the full
+"why did this user get this recommendation" JSON blob —
+RecommendationResult.trace plus narration's raw pre-substitution text
+and any rejected citation indices — assembled by
+app/recommendations/cache.py). Both are admin-only: the /admin
+"behavior & recommendations" view (Journey 3) reads them directly off
+this row, exactly as Section 17 describes, rather than trying to
+reconstruct anything after the fact from logs that eventually rotate.
 """
 
 from datetime import datetime
@@ -63,5 +77,9 @@ class RecommendationSnapshot(Base):
     narration_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     narration_grounded: Mapped[bool] = mapped_column(nullable=False, default=False)
     narration_fallback_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    # Stage 14 — observability, admin-only (never read by /dashboard).
+    trigger_reason: Mapped[str] = mapped_column(String(40), nullable=False, default="no_snapshot")
+    trace: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow, nullable=False)

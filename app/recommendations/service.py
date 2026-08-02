@@ -50,6 +50,7 @@ why this stayed a plain Python loop instead of adopting LangGraph).
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Callable, TypeVar
 
@@ -59,8 +60,9 @@ from app.core.time import utcnow
 from app.db.models.product import Product
 from app.db.models.user_event import UserEvent
 from app.profile.service import build_interest_profile
-from app.recommendations.orchestrator import retrieve_with_refinement
+from app.recommendations.orchestrator import OrchestratedRetrieval, retrieve_with_refinement
 from app.recommendations.schemas import Recommendation, RecommendationResult
+from app.retrieval.query import RetrievalCandidate
 
 DEFAULT_TOP_N = 6
 CANDIDATE_POOL_SIZE = 30  # fetched from the vector store — more than top_n so novelty + diversity have room to filter
@@ -69,6 +71,33 @@ MAX_PER_CATEGORY = 2
 POPULAR_FALLBACK_REASON = "Popular pick — we don't have enough of your activity yet for personalized picks."
 
 T = TypeVar("T")
+
+
+def _serialize_candidates(candidates: list[RetrievalCandidate]) -> list[dict]:
+    return [
+        {"product_id": c.product_id, "title": c.title, "category": c.category, "similarity": c.similarity}
+        for c in candidates
+    ]
+
+
+def _trace(path: str, *, outcome: OrchestratedRetrieval | None = None, **extra) -> dict:
+    """
+    Stage 14: one small helper so every return path in
+    generate_recommendations builds its trace dict the same shape —
+    `path` names which of the branches below produced this result
+    (mirrors Section 17's "why did this user get this recommendation,"
+    answerable without reading code). `outcome`, when given, contributes
+    Stage 11's full retrieval-attempt history and the winning attempt's
+    raw candidate pool (pre-novelty, pre-diversity) with real similarity
+    scores — everything else is branch-specific (engaged IDs excluded,
+    counts before/after filtering, etc.), passed in via **extra.
+    """
+    trace = {"path": path}
+    if outcome is not None:
+        trace["retrieval_attempts"] = [asdict(a) for a in outcome.attempts]
+        trace["candidate_pool"] = _serialize_candidates(outcome.result.candidates)
+    trace.update(extra)
+    return trace
 
 
 def _engaged_product_ids(db: Session, user_id: int) -> set[int]:
@@ -123,6 +152,7 @@ def _popular_fallback(
     now: datetime,
     top_n: int,
     exclude_ids: frozenset[int] = frozenset(),
+    trace: dict | None = None,
 ) -> RecommendationResult:
     """
     Deterministic, non-personalized ranking: highest-rated active
@@ -144,7 +174,11 @@ def _popular_fallback(
         Recommendation(product=p, reason=POPULAR_FALLBACK_REASON, similarity=None) for p in diversified
     ]
     return RecommendationResult(
-        user_id=user_id, generated_at=now, strategy="popular_fallback", recommendations=recommendations
+        user_id=user_id,
+        generated_at=now,
+        strategy="popular_fallback",
+        recommendations=recommendations,
+        trace=trace or {"path": "popular_fallback"},
     )
 
 
@@ -155,12 +189,18 @@ def generate_recommendations(
     profile = build_interest_profile(db, user_id, now=now)
 
     if profile.is_cold_start:
-        return _popular_fallback(db, user_id=user_id, now=now, top_n=top_n)
+        return _popular_fallback(
+            db, user_id=user_id, now=now, top_n=top_n,
+            trace=_trace("cold_start", reason="no_behavioral_signal_yet"),
+        )
 
     outcome = retrieve_with_refinement(db, profile, top_k=CANDIDATE_POOL_SIZE)
     retrieval = outcome.result
     if not retrieval.candidates:
-        return _popular_fallback(db, user_id=user_id, now=now, top_n=top_n)
+        return _popular_fallback(
+            db, user_id=user_id, now=now, top_n=top_n,
+            trace=_trace("no_retrieval_candidates", outcome=outcome),
+        )
 
     engaged_ids = _engaged_product_ids(db, user_id)
     novel_candidates = [c for c in retrieval.candidates if c.product_id not in engaged_ids]
@@ -169,7 +209,13 @@ def generate_recommendations(
         # with — still exclude those from the fallback too, rather than
         # turning around and recommending the exact course they just
         # clicked because the "personalized" path came up empty.
-        return _popular_fallback(db, user_id=user_id, now=now, top_n=top_n, exclude_ids=frozenset(engaged_ids))
+        return _popular_fallback(
+            db, user_id=user_id, now=now, top_n=top_n, exclude_ids=frozenset(engaged_ids),
+            trace=_trace(
+                "all_candidates_already_engaged", outcome=outcome,
+                engaged_product_ids=sorted(engaged_ids),
+            ),
+        )
 
     diversified = _diversify(novel_candidates, top_n, category_of=lambda c: c.category)
 
@@ -196,4 +242,11 @@ def generate_recommendations(
         strategy="personalized",
         recommendations=recommendations,
         retrieval_refined=outcome.refined,
+        trace=_trace(
+            "personalized",
+            outcome=outcome,
+            engaged_product_ids=sorted(engaged_ids),
+            novel_candidate_count=len(novel_candidates),
+            final_recommendation_count=len(recommendations),
+        ),
     )

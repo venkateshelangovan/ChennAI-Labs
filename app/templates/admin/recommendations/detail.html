@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{{ target_user.display_name }} — Recommendation trace — ChennAI Labs Admin{% endblock %}
+{% block content %}
+<div class="admin-header">
+  <h1>{{ target_user.display_name }}</h1>
+  <a href="/admin/recommendations">← All recommendations</a>
+</div>
+<p style="color:#8a8578; margin-top:-12px;">{{ target_user.email }} · user #{{ target_user.id }}</p>
+
+{% if not snapshot %}
+<div class="empty-state">
+  <h3>No recommendation generated yet</h3>
+  <p>This user hasn't visited their dashboard, so there's no trace to show.</p>
+</div>
+{% else %}
+
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Snapshot</h2>
+<table class="admin-table" style="margin-bottom:28px;">
+  <tbody>
+    <tr><td style="width:220px; font-weight:600;">Strategy</td><td>{{ snapshot.strategy }}</td></tr>
+    <tr><td style="font-weight:600;">Trigger reason</td><td>{{ snapshot.trigger_reason }}</td></tr>
+    <tr><td style="font-weight:600;">Retrieval refined?</td><td>{{ "yes" if snapshot.retrieval_refined else "no" }}</td></tr>
+    <tr><td style="font-weight:600;">Generated at</td><td>{{ snapshot.generated_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC</td></tr>
+  </tbody>
+</table>
+
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Recommendations shown</h2>
+{% if recommendations %}
+<table class="admin-table" style="margin-bottom:28px;">
+  <thead>
+    <tr><th>Product</th><th>Reason</th><th>Similarity</th></tr>
+  </thead>
+  <tbody>
+    {% for rec in recommendations %}
+    <tr>
+      <td>
+        {% if rec.product %}{{ rec.product.title }}
+        {% else %}<span class="pill pill-archived">product #{{ rec.product_id }} no longer active</span>{% endif %}
+      </td>
+      <td style="font-size:0.85rem;">{{ rec.reason }}</td>
+      <td>{{ (rec.similarity * 100)|round|int ~ "%" if rec.similarity is not none else "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#8a8578;">None.</p>
+{% endif %}
+
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Narration</h2>
+<table class="admin-table" style="margin-bottom:28px;">
+  <tbody>
+    <tr><td style="width:220px; font-weight:600;">Grounded?</td><td>{{ "yes" if snapshot.narration_grounded else "no" }}</td></tr>
+    <tr><td style="font-weight:600;">Fallback reason</td><td>{{ snapshot.narration_fallback_reason or "—" }}</td></tr>
+    <tr><td style="font-weight:600;">Shown to user</td><td>{{ snapshot.narration_text or "(nothing shown)" }}</td></tr>
+    <tr><td style="font-weight:600;">Raw Mesh output (pre-validation)</td><td style="font-family:monospace; font-size:0.8rem;">{{ snapshot.trace.narration_raw_text or "—" }}</td></tr>
+    <tr>
+      <td style="font-weight:600;">Rejected citations</td>
+      <td>
+        {% if snapshot.trace.narration_rejected_citations %}
+        <span class="pill pill-failed">{{ snapshot.trace.narration_rejected_citations|join(", ") }}</span>
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+{% if snapshot.trace.retrieval_attempts %}
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Retrieval attempts (Stage 11 quality gate)</h2>
+<table class="admin-table" style="margin-bottom:28px;">
+  <thead>
+    <tr><th>#</th><th>Refined?</th><th>Candidates</th><th>Top similarity</th><th>Quality</th><th>Query text</th></tr>
+  </thead>
+  <tbody>
+    {% for attempt in snapshot.trace.retrieval_attempts %}
+    <tr>
+      <td>{{ attempt.attempt }}</td>
+      <td>{{ "yes" if attempt.refined else "no" }}</td>
+      <td>{{ attempt.candidate_count }}</td>
+      <td>{{ (attempt.top_similarity * 100)|round|int ~ "%" if attempt.top_similarity is not none else "—" }}</td>
+      <td>
+        {% if attempt.quality_ok %}<span class="pill pill-active">ok</span>
+        {% else %}<span class="pill pill-pending">{{ attempt.reason }}</span>{% endif %}
+      </td>
+      <td style="font-size:0.75rem; font-family:monospace; color:#555; max-width:280px; overflow-wrap:break-word;">{{ attempt.query_text[:160] }}{{ "…" if attempt.query_text|length > 160 else "" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if snapshot.trace.candidate_pool %}
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Full candidate pool (before novelty/diversity)</h2>
+<table class="admin-table" style="margin-bottom:28px;">
+  <thead>
+    <tr><th>Product</th><th>Category</th><th>Similarity</th><th>Already engaged?</th></tr>
+  </thead>
+  <tbody>
+    {% for candidate in snapshot.trace.candidate_pool %}
+    <tr>
+      <td>{{ candidate.title }}</td>
+      <td style="font-size:0.85rem;">{{ candidate.category }}</td>
+      <td>{{ (candidate.similarity * 100)|round|int }}%</td>
+      <td>{% if candidate.product_id in (snapshot.trace.engaged_product_ids or []) %}<span class="pill pill-archived">yes — excluded</span>{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Full trace (raw)</h2>
+<pre style="background:#fff; border:1px solid #e7e4dd; border-radius:8px; padding:16px; font-size:0.75rem; overflow-x:auto; margin-bottom:28px;">{{ snapshot.trace }}</pre>
+
+{% endif %}
+
+<h2 style="color:var(--color-primary); font-size:1.05rem;">Recent behavior (last {{ recent_events|length }} events)</h2>
+{% if recent_events %}
+<table class="admin-table">
+  <thead>
+    <tr><th>Time</th><th>Type</th><th>Product</th><th>Metadata</th></tr>
+  </thead>
+  <tbody>
+    {% for event in recent_events %}
+    <tr>
+      <td style="white-space:nowrap; font-size:0.8rem; color:#8a8578;">{{ event.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td><span class="pill pill-event pill-event-{{ event.event_type }}">{{ event.event_type }}</span></td>
+      <td>{% if event.product_id %}#{{ event.product_id }}{% else %}—{% endif %}</td>
+      <td style="font-size:0.8rem; font-family:monospace; color:#555;">{{ event.event_metadata }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#8a8578;">No captured events for this user.</p>
+{% endif %}
+{% endblock %}

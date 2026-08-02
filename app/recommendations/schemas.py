@@ -33,6 +33,14 @@ class RecommendationResult:
     strategy: str  # "personalized" | "popular_fallback"
     recommendations: list[Recommendation] = field(default_factory=list)
     retrieval_refined: bool = False  # Stage 11: did the quality-gate loop have to narrow the query and retry?
+    # Stage 14: "why did this user get this recommendation," answerable
+    # from the row alone (Section 17) — retrieval attempts, the raw
+    # candidate pool with scores, and which product IDs were excluded
+    # for already being engaged with. Persisted verbatim into
+    # RecommendationSnapshot.trace by app/recommendations/cache.py;
+    # never read by anything user-facing. See service.py for exactly
+    # what populates this per code path.
+    trace: dict = field(default_factory=dict)
 
     @property
     def is_personalized(self) -> bool:

@@ -34,10 +34,30 @@ request, because traffic is low and a few seconds of latency behind a
 loading state is an acceptable, honest cost for a page that's about to
 show real Mesh-generated content. Stage 12 only decides WHETHER to
 pay that cost on a given request, not how to hide it — that's next.
+
+--- Stage 14: what gets persisted alongside the ranking decision ---
+
+Every time this module actually regenerates (a cache miss), it now
+also writes `trigger_reason` (why regeneration happened —
+app/recommendations/trigger.py's TriggerDecision.reason) and `trace`
+(assembled here from RecommendationResult.trace — Stage 11's retrieval
+attempts and candidate pool, Stage 8's engaged/novel counts — plus
+NarrationResult's raw pre-substitution text and any rejected citation
+indices) onto the same `RecommendationSnapshot` row. This is Section
+17's explicit ask: a trace inspectable per recommendation, stored on
+the row itself rather than only in logs (which rotate). A structured
+`recommendation_generated` log line is emitted at the same point, with
+`latency_ms`, so the two "why did this happen" mechanisms Section 17
+describes — logs for real-time debugging, the persisted trace for
+after-the-fact/admin inspection — stay in sync rather than drifting
+into two different stories about the same event. A cache hit does
+neither: nothing changed, so there's nothing new to explain.
 """
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -50,6 +70,8 @@ from app.recommendations import trigger
 from app.recommendations.narration import NarrationResult, generate_narration
 from app.recommendations.schemas import Recommendation, RecommendationResult
 from app.recommendations.service import generate_recommendations
+
+logger = logging.getLogger("chennai_labs.recommendations.cache")
 
 
 @dataclass
@@ -94,6 +116,7 @@ def _load_from_snapshot(
         strategy=snapshot.strategy,
         recommendations=recommendations,
         retrieval_refined=snapshot.retrieval_refined,
+        trace=snapshot.trace,
     )
     narration = NarrationResult(
         text=snapshot.narration_text,
@@ -103,7 +126,15 @@ def _load_from_snapshot(
     return result, narration
 
 
-def _persist(db: Session, user_id: int, now: datetime, result: RecommendationResult, narration: NarrationResult) -> None:
+def _persist(
+    db: Session,
+    user_id: int,
+    now: datetime,
+    result: RecommendationResult,
+    narration: NarrationResult,
+    trigger_reason: str,
+    latency_ms: float,
+) -> None:
     snapshot = db.query(RecommendationSnapshot).filter(RecommendationSnapshot.user_id == user_id).one_or_none()
     if snapshot is None:
         snapshot = RecommendationSnapshot(user_id=user_id)
@@ -116,7 +147,27 @@ def _persist(db: Session, user_id: int, now: datetime, result: RecommendationRes
     snapshot.narration_text = narration.text
     snapshot.narration_grounded = narration.grounded
     snapshot.narration_fallback_reason = narration.fallback_reason
+    snapshot.trigger_reason = trigger_reason
+    snapshot.trace = {
+        **result.trace,
+        "narration_raw_text": narration.raw_text,
+        "narration_rejected_citations": narration.rejected_citations,
+    }
     db.commit()
+
+    logger.info(
+        "recommendation_generated",
+        extra={
+            "snapshot_id": snapshot.id,
+            "user_id": user_id,
+            "strategy": result.strategy,
+            "trigger_reason": trigger_reason,
+            "retrieval_refined": result.retrieval_refined,
+            "narration_grounded": narration.grounded,
+            "recommendation_count": len(result.recommendations),
+            "latency_ms": round(latency_ms, 2),
+        },
+    )
 
 
 def get_dashboard_recommendations(
@@ -138,8 +189,11 @@ def get_dashboard_recommendations(
         # same as a "no_snapshot" cache miss.
         decision = trigger.TriggerDecision(True, "cached_products_gone")
 
+    started = time.perf_counter()
     result = generate_recommendations(db, user_id, now=now)
     narration = generate_narration(result.recommendations)
-    _persist(db, user_id, now, result, narration)
+    latency_ms = (time.perf_counter() - started) * 1000
+
+    _persist(db, user_id, now, result, narration, decision.reason, latency_ms)
 
     return DashboardRecommendations(result=result, narration=narration, cache_hit=False, trigger_reason=decision.reason)
