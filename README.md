@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 11 of 20 — the retrieval-refinement loop is live, and the LangGraph decision has been made: not yet (see below for why). Stage 7's retrieval now runs through a bounded quality-gate-and-retry loop before Stage 8 ever sees it, still a plain, fully-tested Python function, not graph machinery.**
+**Status: Stage 12 of 20 — trigger + caching rules are live. `/dashboard` no longer recomputes the full pipeline (retrieval, refinement, novelty/diversity, Mesh narration) on every page view — a persisted `RecommendationSnapshot` is served as-is until a deterministic trigger (no snapshot yet / TTL elapsed with real new signal / manual refresh, rate-limited via cooldown) says it's actually time to regenerate.**
 
 ### Mesh API integration (Stage 9)
 
@@ -150,13 +150,31 @@ The Stage 0 architecture doc deliberately deferred one call to this stage: the p
 
 Live-verified against the real seeded catalog and a mock Mesh server: a normal user's retrieval passed the quality gate on the first attempt (`quality_ok: true`, no refinement — the 16-course catalog is comfortably above the bar). To exercise the refine path itself, the catalog was temporarily thinned to 3 active courses via the real `archive_product` path (proper dual-write, not a raw SQL shortcut): the first attempt logged `too_few_candidates`, `retrieval_refining` fired, the narrowed retry still logged `too_few_candidates` (3 active courses can never clear a floor of 5, no matter how the query is narrowed), and the loop stopped at the bound — `/dashboard` still returned `200` with recommendations rendered, exactly the "give up gracefully, never break" behavior this stage was built to guarantee.
 
+## Trigger + caching (Stage 12)
+
+Through Stage 11, every single `/dashboard` view recomputed the entire pipeline from scratch — Stage 7-11's retrieval and Stage 10's Mesh chat call included — on every page load. Correct, but proportional to page views rather than to actual behavior change: reloading the dashboard five times in a minute doesn't produce five times as much genuine signal. Stage 12 closes that gap with exactly the mechanism Stage 0's Section 14/15 describe: a persisted cache, and a deterministic trigger that decides whether it's still good enough to serve as-is.
+
+**What's cached.** `RecommendationSnapshot` (`app/db/models/recommendation_snapshot.py`) — one row per user, upserted, storing only the ranking decision (product IDs, order, reason, similarity) plus the narration result. Display fields are deliberately never duplicated into it: `app/recommendations/cache.py` re-fetches the real `Product` rows by ID on every cache hit, so a price or rating change is never stale just because the recommendation itself hasn't changed. If a cached product was archived since the snapshot was generated, it's silently dropped (the familiar "vector index ahead of SQL" drift-safety pattern); if every cached product has vanished, the snapshot is treated as a cache miss and regenerated rather than shown as an honestly-empty list.
+
+**The trigger, `app/recommendations/trigger.py`.** Three conditions, all deterministic DB queries, zero AI cost to evaluate:
+
+- **No snapshot yet** — always regenerate.
+- **TTL elapsed (`TTL_HOURS` = 24) *and* meaningful signal since** — at least `MIN_EVENTS_SINCE_REFRESH` (5) events, or even a single `search` event (strong explicit intent), landed after the snapshot was generated. Both conditions, not either: a snapshot that's merely old but nothing new happened isn't stale in any way that matters, and regenerating it would spend a Mesh call to produce the same answer.
+- **Manual refresh** — a "Refresh recommendations" button on `/dashboard` (`POST /dashboard/refresh`, same CSRF-protected POST-then-redirect pattern as `/admin/products/sync`). Section 16 asks for this to be rate-limited; Stage 16's real rate limiting doesn't exist yet, so this reuses state that's already there instead of building ahead of that stage — a manual refresh within `MANUAL_REFRESH_COOLDOWN_SECONDS` (60) of the last generation is refused, using the snapshot's own `generated_at` as the cooldown marker rather than a second piece of state to keep in sync.
+
+Everything else is a cache hit — including a merely-stale-but-signal-free snapshot. The asymmetry is deliberate: a false "still fresh" costs a mildly outdated recommendation, a false "stale" costs an unnecessary AI spend.
+
+**Why generation is still synchronous, in-request.** Stage 0 describes a stale-while-revalidate pattern (serve the old value immediately, regenerate in the background via `BackgroundTasks`) — that's explicitly scoped to Stage 15's proactive digest. Through Stage 14, the same section says generation runs synchronously within the triggering request; Stage 12 only decides *whether* to pay that cost on a given request, not how to hide it.
+
+Live-verified end to end against the real seeded catalog and a mock Mesh server, all six trigger outcomes, using the actual Mesh call count observed in the mock server's log as ground truth (not just HTTP status codes): first-ever dashboard view for a new user made exactly one Mesh call (`no_snapshot`); an immediate second view made zero (`fresh`); pushing the snapshot's `generated_at` back 25 hours with no new events still made zero (`stale_but_no_signal`); adding 5 events after that same old snapshot made one (`ttl_and_signal`); a manual refresh immediately after that made zero (`manual_refresh_on_cooldown`); and a manual refresh after simulating 90 elapsed seconds made one (`manual_refresh`) — confirmed by the dashboard's cache banner (`Freshly generated just now` vs. `...no AI calls made for this page view`) matching the Mesh call count in every case.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-143 tests as of Stage 11: Stage 10's suite (128) plus 15 covering the retrieval-refinement loop — the quality gate and query-narrowing as pure functions (`tests/test_orchestrator.py`), the orchestration logic itself with a stubbed `retrieve_for_profile` (refines exactly when it should, stops at the bound, keeps the better of two weak attempts, skips refinement for a cold-start result), and two end-to-end integration tests against the real (test-isolated) vector store proving both paths — a thin catalog genuinely triggers refinement, a rich one genuinely doesn't.
+162 tests as of Stage 12: Stage 11's suite (143) plus 19 covering the trigger + cache — `tests/test_trigger.py`'s deterministic decision logic (no snapshot, fresh, stale-with/without-signal, manual refresh with/without cooldown, events before the snapshot don't count as new signal), and `tests/test_cache.py`'s end-to-end integration tests, which assert actual CALL COUNTS on `generate_recommendations`/`generate_narration` (not just final content) to prove a cache hit really does skip the expensive pipeline — plus a live-Product-refetch test (a cached recommendation reflects a price change made after the snapshot) and an all-cached-products-archived fallback test.
 
 ## Environment variables
 
@@ -179,7 +197,7 @@ chennai_labs/
 │   ├── db/
 │   │   ├── base.py            # declarative Base + register_models()
 │   │   ├── session.py         # engine, SessionLocal, get_db dependency
-│   │   └── models/             # User, AuthSession, Product, UserEvent
+│   │   └── models/             # User, AuthSession, Product, UserEvent, RecommendationSnapshot
 │   ├── auth/
 │   │   ├── service.py          # register/authenticate/session logic (no HTTP)
 │   │   ├── dependencies.py     # get_current_user, require_user, require_admin
@@ -204,7 +222,9 @@ chennai_labs/
 │   │   ├── schemas.py            # Recommendation (wraps a real Product) / RecommendationResult
 │   │   ├── service.py            # generate_recommendations — novelty, diversity, popular fallback
 │   │   ├── narration.py          # Stage 10: LLM summary over an already-final list + grounding validation
-│   │   └── orchestrator.py       # Stage 11: bounded retrieval quality-gate + refine/retry loop (no LangGraph — see docstring)
+│   │   ├── orchestrator.py       # Stage 11: bounded retrieval quality-gate + refine/retry loop (no LangGraph — see docstring)
+│   │   ├── trigger.py            # Stage 12: deterministic "should this regenerate right now" decision
+│   │   └── cache.py              # Stage 12: serves the persisted RecommendationSnapshot or regenerates + persists
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface, MeshEmbeddingProvider (default) +
 │   │   │                         #   LocalHashEmbeddingProvider (kept as the test suite's stand-in)

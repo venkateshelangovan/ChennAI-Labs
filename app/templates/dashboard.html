@@ -19,6 +19,17 @@
   <a href="/profile">Why these? See your interest profile →</a>
 </div>
 
+<div class="cache-banner">
+  <span>
+    {% if cache_hit %}Showing a cached recommendation from {{ recommendations.generated_at.strftime("%b %d, %H:%M") }} UTC — no AI calls made for this page view.
+    {% else %}Freshly generated just now.{% endif %}
+  </span>
+  <form method="post" action="/dashboard/refresh" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <button type="submit" class="link-button">Refresh recommendations</button>
+  </form>
+</div>
+
 {% if recommendations.strategy == "popular_fallback" %}
 <p class="profile-explainer">
   {{ recommendations.recommendations[0].reason if recommendations.recommendations else "We don't have enough of your activity yet for personalized picks." }}

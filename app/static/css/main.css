@@ -371,6 +371,27 @@ a {
   font-weight: 600;
 }
 
+/* Stage 12: cache-hit/refresh indicator on /dashboard — neutral, not a
+   warning color like .sync-banner, since serving from cache is the
+   expected, desired behavior, not a problem needing attention. */
+.cache-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f2f1ec;
+  border: 1px solid #ded9cc;
+  color: #5c584c;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+}
+
+.cache-banner .link-button {
+  color: #5c584c;
+  font-weight: 600;
+}
+
 .event-total {
   font-size: 0.85rem;
   color: #8a8578;

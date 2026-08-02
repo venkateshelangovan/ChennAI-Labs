@@ -21,8 +21,7 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.events.schemas import TRACKING_SESSION_COOKIE
 from app.events.service import reconcile_session
-from app.recommendations.narration import generate_narration
-from app.recommendations.service import generate_recommendations
+from app.recommendations.cache import get_dashboard_recommendations
 from app.templating import templates
 
 router = APIRouter()
@@ -187,14 +186,51 @@ async def logout(request: Request, db: Session = Depends(get_db)):
 # only ever describes an already-final list, and returns text=None on
 # any failure (Mesh unreachable, or a grounding check failure), which
 # the template treats as "don't show a narration," never as an error.
+#
+# Stage 12: neither of those pipelines runs on every view anymore.
+# get_dashboard_recommendations (app/recommendations/cache.py) decides,
+# via app/recommendations/trigger.py's deterministic rules, whether the
+# persisted RecommendationSnapshot is still good enough to serve as-is
+# (zero Mesh calls) or needs regenerating. The template only cares about
+# `.result` / `.narration`, identical in shape to what this route used
+# to compute directly — a cache hit is invisible to the page itself.
 # ---------------------------------------------------------------------------
 
 @router.get("/dashboard")
 async def dashboard(request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)):
-    recommendations = generate_recommendations(db, user.id)
-    narration = generate_narration(recommendations.recommendations)
-    return templates.TemplateResponse(
+    dashboard_recs = get_dashboard_recommendations(db, user.id)
+    token = issue_csrf_token(request)
+    response = templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"user": user, "current_user": user, "recommendations": recommendations, "narration": narration},
+        {
+            "user": user,
+            "current_user": user,
+            "recommendations": dashboard_recs.result,
+            "narration": dashboard_recs.narration,
+            "cache_hit": dashboard_recs.cache_hit,
+            "csrf_token": token,
+        },
     )
+    set_csrf_cookie(response, token)
+    return response
+
+
+@router.post("/dashboard/refresh")
+async def dashboard_refresh(
+    request: Request,
+    csrf_token: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Manual trigger condition (c) from Stage 0 Section 14 — same
+    CSRF-protected POST-then-redirect pattern as /admin/products/sync.
+    Rate-limited via trigger.py's cooldown rather than real per-IP/user
+    rate limiting (Stage 16, not built yet) — see that module's
+    docstring for why reusing the snapshot's own timestamp is enough
+    for now.
+    """
+    if verify_csrf(request, csrf_token):
+        get_dashboard_recommendations(db, user.id, manual_refresh=True)
+    return RedirectResponse(url="/dashboard", status_code=303)
