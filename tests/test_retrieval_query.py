@@ -202,4 +202,12 @@ def test_profile_page_shows_retrieval_preview_with_candidates(client, db_session
     assert response.status_code == 200
     assert "Retrieval preview" in response.text
     assert "Agentic AI Systems in Production" in response.text
-    assert "not real recommendations yet" in response.text
+    # Stage 18: this copy used to claim retrieval "doesn't have ranking
+    # logic, novelty, or business rules on top of it yet (that's Stage
+    # 8)" and that embeddings were "still a local, non-semantic
+    # placeholder (Stage 9 swaps in Mesh)" — both true when written at
+    # Stage 7, both stale and actively misleading by the time Stage 8/9
+    # actually shipped. Fixed to describe what's actually still true
+    # today: this preview is upstream of novelty/diversity/caching, not
+    # a claim about which embedding provider is active.
+    assert "not the same list as your dashboard" in response.text

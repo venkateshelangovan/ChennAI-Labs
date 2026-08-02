@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.admin.events_routes import router as admin_events_router
 from app.admin.recommendations_routes import router as admin_recommendations_router
@@ -175,6 +176,30 @@ async def handle_not_authenticated(request: Request, exc: NotAuthenticated):
 async def handle_not_authorized(request: Request, exc: NotAuthorized):
     """A valid session without the required role: 403, not a redirect."""
     return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_exception(request: Request, exc: StarletteHTTPException):
+    """
+    Stage 18 QA finding: an undefined route (e.g. a stale bookmark, a
+    typo'd URL, a dead link from an old version of a page) was falling
+    through to FastAPI's default handler — a bare `{"detail":"Not
+    Found"}` JSON body with no styling, no nav, nothing pointing the
+    user back into the app. Fine for an API-only service, wrong for a
+    server-rendered site where every other page shares one visual
+    language (Stage 0's design system).
+
+    This only overrides the *rendering* of a 404 (courses/not_found.html
+    already existed as a narrower case — an archived/missing course
+    slug — and is untouched); every other status code this app can
+    raise via HTTPException still falls back to the same plain JSON
+    body FastAPI would have produced, since `exc.status_code` gates
+    which branch runs and nothing else here changes existing behavior
+    for e.g. a 400 from bad input.
+    """
+    if exc.status_code == 404:
+        return templates.TemplateResponse(request, "not_found.html", {}, status_code=404)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.get("/health")

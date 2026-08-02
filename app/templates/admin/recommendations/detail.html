@@ -5,7 +5,7 @@
   <h1>{{ target_user.display_name }}</h1>
   <a href="/admin/recommendations">← All recommendations</a>
 </div>
-<p style="color:#8a8578; margin-top:-12px;">{{ target_user.email }} · user #{{ target_user.id }}</p>
+<p class="text-muted mt-tight">{{ target_user.email }} · user #{{ target_user.id }}</p>
 
 {% if not snapshot %}
 <div class="empty-state">
@@ -14,19 +14,22 @@
 </div>
 {% else %}
 
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Snapshot</h2>
-<table class="admin-table" style="margin-bottom:28px;">
+<h2 class="admin-section-title">Snapshot</h2>
+<div class="table-responsive mb-section">
+<table class="admin-table">
   <tbody>
-    <tr><td style="width:220px; font-weight:600;">Strategy</td><td>{{ snapshot.strategy }}</td></tr>
-    <tr><td style="font-weight:600;">Trigger reason</td><td>{{ snapshot.trigger_reason }}</td></tr>
-    <tr><td style="font-weight:600;">Retrieval refined?</td><td>{{ "yes" if snapshot.retrieval_refined else "no" }}</td></tr>
-    <tr><td style="font-weight:600;">Generated at</td><td>{{ snapshot.generated_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC</td></tr>
+    <tr><td class="col-label">Strategy</td><td>{{ snapshot.strategy }}</td></tr>
+    <tr><td class="text-strong">Trigger reason</td><td>{{ snapshot.trigger_reason }}</td></tr>
+    <tr><td class="text-strong">Retrieval refined?</td><td>{{ "yes" if snapshot.retrieval_refined else "no" }}</td></tr>
+    <tr><td class="text-strong">Generated at</td><td>{{ snapshot.generated_at.strftime("%Y-%m-%d %H:%M:%S") }} UTC</td></tr>
   </tbody>
 </table>
+</div>
 
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Recommendations shown</h2>
+<h2 class="admin-section-title">Recommendations shown</h2>
 {% if recommendations %}
-<table class="admin-table" style="margin-bottom:28px;">
+<div class="table-responsive mb-section">
+<table class="admin-table">
   <thead>
     <tr><th>Product</th><th>Reason</th><th>Similarity</th></tr>
   </thead>
@@ -37,25 +40,27 @@
         {% if rec.product %}{{ rec.product.title }}
         {% else %}<span class="pill pill-archived">product #{{ rec.product_id }} no longer active</span>{% endif %}
       </td>
-      <td style="font-size:0.85rem;">{{ rec.reason }}</td>
+      <td class="text-sm">{{ rec.reason }}</td>
       <td>{{ (rec.similarity * 100)|round|int ~ "%" if rec.similarity is not none else "—" }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-<p style="color:#8a8578;">None.</p>
+<p class="text-muted">None.</p>
 {% endif %}
 
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Narration</h2>
-<table class="admin-table" style="margin-bottom:28px;">
+<h2 class="admin-section-title">Narration</h2>
+<div class="table-responsive mb-section">
+<table class="admin-table">
   <tbody>
-    <tr><td style="width:220px; font-weight:600;">Grounded?</td><td>{{ "yes" if snapshot.narration_grounded else "no" }}</td></tr>
-    <tr><td style="font-weight:600;">Fallback reason</td><td>{{ snapshot.narration_fallback_reason or "—" }}</td></tr>
-    <tr><td style="font-weight:600;">Shown to user</td><td>{{ snapshot.narration_text or "(nothing shown)" }}</td></tr>
-    <tr><td style="font-weight:600;">Raw Mesh output (pre-validation)</td><td style="font-family:monospace; font-size:0.8rem;">{{ snapshot.trace.narration_raw_text or "—" }}</td></tr>
+    <tr><td class="col-label">Grounded?</td><td>{{ "yes" if snapshot.narration_grounded else "no" }}</td></tr>
+    <tr><td class="text-strong">Fallback reason</td><td>{{ snapshot.narration_fallback_reason or "—" }}</td></tr>
+    <tr><td class="text-strong">Shown to user</td><td>{{ snapshot.narration_text or "(nothing shown)" }}</td></tr>
+    <tr><td class="text-strong">Raw Mesh output (pre-validation)</td><td class="text-mono text-sm">{{ snapshot.trace.narration_raw_text or "—" }}</td></tr>
     <tr>
-      <td style="font-weight:600;">Rejected citations</td>
+      <td class="text-strong">Rejected citations</td>
       <td>
         {% if snapshot.trace.narration_rejected_citations %}
         <span class="pill pill-failed">{{ snapshot.trace.narration_rejected_citations|join(", ") }}</span>
@@ -64,10 +69,12 @@
     </tr>
   </tbody>
 </table>
+</div>
 
 {% if snapshot.trace.retrieval_attempts %}
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Retrieval attempts (Stage 11 quality gate)</h2>
-<table class="admin-table" style="margin-bottom:28px;">
+<h2 class="admin-section-title">Retrieval attempts (Stage 11 quality gate)</h2>
+<div class="table-responsive mb-section">
+<table class="admin-table">
   <thead>
     <tr><th>#</th><th>Refined?</th><th>Candidates</th><th>Top similarity</th><th>Quality</th><th>Query text</th></tr>
   </thead>
@@ -82,16 +89,18 @@
         {% if attempt.quality_ok %}<span class="pill pill-active">ok</span>
         {% else %}<span class="pill pill-pending">{{ attempt.reason }}</span>{% endif %}
       </td>
-      <td style="font-size:0.75rem; font-family:monospace; color:#555; max-width:280px; overflow-wrap:break-word;">{{ attempt.query_text[:160] }}{{ "…" if attempt.query_text|length > 160 else "" }}</td>
+      <td class="text-xs text-mono text-secondary truncate-cell">{{ attempt.query_text[:160] }}{{ "…" if attempt.query_text|length > 160 else "" }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endif %}
 
 {% if snapshot.trace.candidate_pool %}
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Full candidate pool (before novelty/diversity)</h2>
-<table class="admin-table" style="margin-bottom:28px;">
+<h2 class="admin-section-title">Full candidate pool (before novelty/diversity)</h2>
+<div class="table-responsive mb-section">
+<table class="admin-table">
   <thead>
     <tr><th>Product</th><th>Category</th><th>Similarity</th><th>Already engaged?</th></tr>
   </thead>
@@ -99,22 +108,24 @@
     {% for candidate in snapshot.trace.candidate_pool %}
     <tr>
       <td>{{ candidate.title }}</td>
-      <td style="font-size:0.85rem;">{{ candidate.category }}</td>
+      <td class="text-sm">{{ candidate.category }}</td>
       <td>{{ (candidate.similarity * 100)|round|int }}%</td>
       <td>{% if candidate.product_id in (snapshot.trace.engaged_product_ids or []) %}<span class="pill pill-archived">yes — excluded</span>{% else %}—{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endif %}
 
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Full trace (raw)</h2>
-<pre style="background:#fff; border:1px solid #e7e4dd; border-radius:8px; padding:16px; font-size:0.75rem; overflow-x:auto; margin-bottom:28px;">{{ snapshot.trace }}</pre>
+<h2 class="admin-section-title">Full trace (raw)</h2>
+<pre class="pre-trace">{{ snapshot.trace }}</pre>
 
 {% endif %}
 
-<h2 style="color:var(--color-primary); font-size:1.05rem;">Recent behavior (last {{ recent_events|length }} events)</h2>
+<h2 class="admin-section-title">Recent behavior (last {{ recent_events|length }} events)</h2>
 {% if recent_events %}
+<div class="table-responsive">
 <table class="admin-table">
   <thead>
     <tr><th>Time</th><th>Type</th><th>Product</th><th>Metadata</th></tr>
@@ -122,15 +133,16 @@
   <tbody>
     {% for event in recent_events %}
     <tr>
-      <td style="white-space:nowrap; font-size:0.8rem; color:#8a8578;">{{ event.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td class="nowrap text-xs text-muted">{{ event.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
       <td><span class="pill pill-event pill-event-{{ event.event_type }}">{{ event.event_type }}</span></td>
       <td>{% if event.product_id %}#{{ event.product_id }}{% else %}—{% endif %}</td>
-      <td style="font-size:0.8rem; font-family:monospace; color:#555;">{{ event.event_metadata }}</td>
+      <td class="text-xs text-mono text-secondary">{{ event.event_metadata }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-<p style="color:#8a8578;">No captured events for this user.</p>
+<p class="text-muted">No captured events for this user.</p>
 {% endif %}
 {% endblock %}

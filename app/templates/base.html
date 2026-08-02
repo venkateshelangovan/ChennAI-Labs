@@ -3,7 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="{% block meta_description %}A behavioral AI recommendation platform for DSA/MAANG interview prep, math for ML, and the full applied-AI ladder — courses that adapt to what you're actually learning.{% endblock %}" />
   <title>{% block title %}ChennAI Labs{% endblock %}</title>
+  <!-- Stage 18: an inline SVG data URI rather than a static /static/
+       favicon.ico file — no binary asset to generate/store for a one-
+       letter mark, and it inherits the exact brand indigo (#2E2A72)
+       from the design language (Stage 0, Section 1) instead of an
+       exported PNG that could drift from it. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232E2A72'/%3E%3Ctext x='32' y='44' font-family='Arial, sans-serif' font-size='34' font-weight='700' fill='%23F2A93B' text-anchor='middle'%3EC%3C/text%3E%3C/svg%3E" />
   <!-- Stage 13: main.css has defined --font-ui/--font-narrative since
        Stage 1, but nothing ever actually loaded Inter or Source Serif 4
        — every page has silently been rendering system-font fallbacks

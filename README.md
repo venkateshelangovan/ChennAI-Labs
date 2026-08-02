@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 17 of 20 — full test suite + eval framework. 205 pytest tests at 96% coverage, audited line-by-line against Section 18's explicit coverage checklist. New: `evals/run_evals.py`, a separate quality-eval harness (not pytest) that runs Stage 0 Section 23's three demo user journeys against the real pipeline and reports behavioral metrics — category relevance, level-appropriateness, recency-weighting/pivot responsiveness — surfacing one genuine, documented ranking gap in the process. See "Full test suite + eval framework" below.**
+**Status: Stage 18 of 20 — UI/UX final polish. 207 pytest tests. A whole-site design-system pass: scattered inline `style="..."` attributes (accumulated from Stage 3 onward) consolidated into named CSS utility classes, responsive gaps closed (nav overflow, table horizontal-scroll, form field wrapping), a branded 404 page for undefined routes, favicon/meta description, a11y labels on filter controls, and one real stale-copy bug fixed on `/profile` (text describing a Stage 7-era system state that had been factually wrong since Stage 8/9 shipped). See "UI/UX final polish" below.**
 
 ### Mesh API integration (Stage 9)
 
@@ -263,13 +263,26 @@ Ran with `pytest-cov`: **96% line coverage** (1600 statements, 71 missed). The h
 
 Run it: `python -m evals.run_evals` (writes `evals/latest_report.md` and prints the same to stdout). **Latest run: 3 of 4 checks PASS.** The one WARN is a real finding, not a miscalibrated threshold — logged in the report rather than quietly tuned away: Stage 8's diversity re-rank caps how many recommendations share a *category*, but has no concept of *level* at all, so a beginner user's list can still include `advanced`-labeled courses from other categories once their own category's cap is reached (67% non-advanced against the eval's 70% bar). Section 23's stated expectation for User B ("stays beginner/intermediate, explicitly avoiding advanced material") isn't fully met by the current ranker. Not fixed in this stage — Stage 17's job was building the harness that *finds* this kind of gap, not re-opening Stage 8's already-shipped, already-tested ranking logic; it's flagged here as a real follow-up candidate (exclude/penalize `advanced` candidates when a profile's own engaged levels are entirely beginner/intermediate, or add level as a second diversity axis alongside category).
 
+## UI/UX final polish (Stage 18)
+
+A whole-site pass, distinct from Stage 13's narrower dashboard-only polish — this one covers every template. Built from a QA checklist compiled by reading `main.css` and every page in `app/templates/`:
+
+- **CSS consolidation.** Roughly 60 scattered inline `style="..."` attributes, accumulated one stage at a time since Stage 3, replaced with named, reusable utility classes in `main.css` (`.text-muted`, `.text-sm`/`.text-xs`, `.nowrap`, `.text-mono`, `.admin-section-title`, `.col-label`, `.table-responsive`, `.btn-inline`, `.btn-secondary`, and others) — no visual change, verified template-by-template against existing test assertions (which check text/class content, not inline styles) before and after. The one legitimate exception left in place: `profile/index.html`'s `.profile-bar-fill` width, which is a genuinely dynamic, per-row percentage — a CSS class can't express that, so it stays inline by design.
+- **Responsive gaps closed.** `.site-nav` had no `flex-wrap` — invisible for a regular user's 2-item nav, but an admin's 6-item nav would have silently run off-screen on mobile with no scroll affordance. `.admin-table` had no horizontal-scroll wrapper (`.table-responsive`) for its wider tables (trace views, event logs). `.admin-form .field-row` had no wrap, so multi-field admin forms could overflow narrow viewports. Added a `@media (max-width: 640px)` block for header/nav/main padding.
+- **Branded 404.** An undefined route used to fall through to FastAPI's default `{"detail":"Not Found"}` JSON body — inconsistent with every other page sharing one visual language. `app/main.py` now registers a `StarletteHTTPException` handler that renders `app/templates/not_found.html` (matching the existing `courses/not_found.html` empty-state style) for any 404, and passes every other status code through unchanged. The narrower, pre-existing "this course slug doesn't exist" 404 (`courses/not_found.html`, raised directly as a `TemplateResponse` rather than an `HTTPException`) is untouched — verified live that both render their own distinct copy.
+- **Stale copy fix.** `/profile`'s retrieval-preview caveat had been accurate when written at Stage 7 ("no ranking logic yet — that's Stage 8"; "non-semantic placeholder — Stage 9 swaps in Mesh") and factually wrong by Stage 18, since both shipped stages ago. Rewritten to describe what's actually still true today: the preview is upstream of novelty exclusion, diversity capping, and Stage 12's caching/trigger rules, so it's a different (not stale, just narrower) view than the real dashboard. `tests/test_retrieval_query.py` updated to assert the corrected copy.
+- **Small a11y/metadata fixes.** `aria-label`s on the catalog search box and category/level/event-type filter selects (previously screen-reader-invisible); an inline SVG favicon (brand indigo background, amber "C") instead of a missing `favicon.ico`; a real `<meta name="description">` (previously templated but never actually populated by any page).
+- Every change cross-checked against the existing test suite's string/class assertions before editing, specifically to avoid silently breaking `tests/test_admin_recommendations.py` and friends while moving styles into classes.
+
+Live-verified end to end against a real running server + mock Mesh endpoint: unknown routes return a branded HTML 404 (not JSON), `courses/<bad-slug>` still returns its own distinct 404 copy, the homepage serves the favicon and meta description, and — after registering, logging in, and posting a real `view`/`click` event pair to `/api/events` — `/profile` renders "Category affinity" and a "Retrieval preview" section containing the corrected copy (`"not the same list as your dashboard"`) with zero stray `style="..."` attributes besides the one legitimately-dynamic bar-fill width; `/dashboard` and `/admin/recommendations` render with zero inline styles at all.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-205 tests as of Stage 17: Stage 16's 198 plus 7 new — `tests/test_scheduler.py` (6 tests, closing the coverage gap above) and one added assertion in `tests/test_auth.py` for `verify_password`'s malformed-hash branch (a corrupted DB row should fail closed, not throw a 500). Run with coverage via `pytest --cov=app --cov-report=term-missing` (`pytest-cov`, not in `requirements.txt` — a dev-only tool, not a runtime dependency).
+207 tests as of Stage 18: Stage 17's 205, minus one assertion updated in place (the stale-copy fix above), plus `tests/test_not_found.py` (2 tests: the new branded 404, and confirmation the course-specific 404 is unaffected). Also fixed a real, previously-latent bug in `tests/conftest.py`'s `isolated_vector_store` fixture while verifying the suite for this stage: it patched `settings.vector_db_path` via `monkeypatch.setattr`, which `tests/test_retrieval.py`'s outage-simulation tests were unknowingly undoing mid-test via their own `monkeypatch.undo()` call — silently falling back to the real on-disk `./.chroma` store instead of the test's isolated tmp path. Invisible as long as `./.chroma` happened to be writable and uncorrupted; it surfaced as a hard `chromadb...disk I/O error` once that wasn't true. Fixed the same way `isolated_embedding_provider` already handles this exact footgun (see its docstring): plain assignment + manual restore instead of `monkeypatch.setattr`, immune to any test's own `undo()`. Run with coverage via `pytest --cov=app --cov-report=term-missing` (`pytest-cov`, not in `requirements.txt` — a dev-only tool, not a runtime dependency).
 
 ## Environment variables
 
@@ -334,6 +347,7 @@ chennai_labs/
 │   │   └── client.py             # the ONLY module allowed to call an AI provider —
 │   │                              #   retry-aware Mesh HTTP client: embed() (Stage 9), chat() (Stage 10)
 │   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, admin/recommendations/, profile/, partials/)
+│   │   └── not_found.html        # Stage 18: branded 404 for any undefined route
 │   └── static/
 │       ├── css/                  # brand tokens + site nav/catalog/admin/profile styling
 │       └── js/tracker.js         # non-blocking behavioral event capture (see below)

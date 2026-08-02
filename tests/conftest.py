@@ -71,7 +71,7 @@ def no_digest_scheduler(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def isolated_vector_store(tmp_path, monkeypatch):
+def isolated_vector_store(tmp_path):
     """
     Every product create/update/archive/restore now triggers a vector
     write (Stage 4). Without this fixture, every test in the suite
@@ -81,10 +81,29 @@ def isolated_vector_store(tmp_path, monkeypatch):
     no test has to remember to ask for isolation; it's not opt-in
     because forgetting it would produce flaky, order-dependent failures
     rather than a clean error.
+
+    Stage 18 bugfix: this used to patch `settings.vector_db_path` via
+    `monkeypatch.setattr`. That's tracked by the test's shared
+    `monkeypatch` fixture instance, so tests/test_retrieval.py's
+    failure-simulation tests calling `monkeypatch.undo()` mid-test (to
+    end a simulated outage) were undoing THIS patch too — silently
+    falling back to the real `settings.vector_db_path` (`./.chroma`) for
+    the rest of the test. That's exactly the footgun
+    `isolated_embedding_provider` below was already written to avoid
+    (see its docstring) — this fixture just hadn't been given the same
+    treatment yet. It stayed invisible as long as `./.chroma` happened
+    to be a writable, uncorrupted directory; it surfaced as a hard
+    `chromadb...InternalError: disk I/O error` once that on-disk store
+    was in a bad state, which is a real bug regardless of what state
+    `./.chroma` happens to be in — a test must never be able to touch
+    it at all. Fixed the same way: plain assignment + manual restore,
+    immune to any test's own `monkeypatch.undo()` call.
     """
-    monkeypatch.setattr(settings, "vector_db_path", str(tmp_path / "chroma"))
+    original = settings.vector_db_path
+    settings.vector_db_path = str(tmp_path / "chroma")
     vs_module._client = None
     yield
+    settings.vector_db_path = original
     vs_module._client = None
 
 

@@ -6,21 +6,22 @@
   <span class="event-total">{{ rows|length }} user{{ "s" if rows|length != 1 else "" }} with a recommendation</span>
 </div>
 
-<div style="margin-bottom:20px; display:flex; align-items:center; gap:14px;">
+<div class="mb-20 inline-flex-row">
   <form method="post" action="/admin/recommendations/run-digest">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-    <button type="submit">Run digest now</button>
+    <button type="submit" class="btn-primary btn-inline">Run digest now</button>
   </form>
   {% if digest_result %}
-  <span style="font-size:0.85rem; color:#8a8578;">Last run: {{ digest_result }}</span>
+  <span class="text-sm text-muted">Last run: {{ digest_result }}</span>
   {% endif %}
 </div>
-<p style="color:#8a8578; font-size:0.8rem; margin-top:-12px; margin-bottom:20px;">
+<p class="text-muted text-xs mt-tight mb-20">
   Regenerates every user's recommendation now, same function the scheduled daily digest
   (Stage 15) calls at {{ "%02d"|format(digest_hour_utc) }}:00 UTC — useful for testing without waiting for the cron.
 </p>
 
 {% if rows %}
+<div class="table-responsive">
 <table class="admin-table">
   <thead>
     <tr>
@@ -35,7 +36,7 @@
   <tbody>
     {% for snapshot, user in rows %}
     <tr>
-      <td>{{ user.display_name }}<br /><span style="color:#8a8578; font-size:0.8rem;">{{ user.email }}</span></td>
+      <td>{{ user.display_name }}<br /><span class="text-muted text-xs">{{ user.email }}</span></td>
       <td>
         {% if snapshot.strategy == "personalized" %}
         <span class="pill pill-active">personalized</span>
@@ -43,22 +44,23 @@
         <span class="pill pill-pending">popular fallback</span>
         {% endif %}
       </td>
-      <td style="font-size:0.85rem;">{{ snapshot.trigger_reason }}</td>
+      <td class="text-sm">{{ snapshot.trigger_reason }}</td>
       <td>
         {% if snapshot.narration_grounded %}
         <span class="pill pill-active">grounded</span>
         {% elif snapshot.narration_fallback_reason %}
         <span class="pill pill-failed">{{ snapshot.narration_fallback_reason }}</span>
         {% else %}
-        <span style="color:#8a8578;">—</span>
+        <span class="text-muted">—</span>
         {% endif %}
       </td>
-      <td style="white-space:nowrap; font-size:0.8rem; color:#8a8578;">{{ snapshot.generated_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td class="nowrap text-xs text-muted">{{ snapshot.generated_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
       <td><a href="/admin/recommendations/{{ user.id }}">View trace →</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="empty-state">
   <h3>No recommendations generated yet</h3>

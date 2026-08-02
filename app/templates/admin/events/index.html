@@ -6,8 +6,8 @@
   <span class="event-total">{{ total_count }} total captured</span>
 </div>
 
-<form method="get" action="/admin/events" class="catalog-filters" style="margin-bottom:20px;">
-  <select name="event_type" onchange="this.form.submit()">
+<form method="get" action="/admin/events" class="catalog-filters mb-20">
+  <select name="event_type" onchange="this.form.submit()" aria-label="Filter by event type">
     <option value="">All event types</option>
     {% for t in event_types %}
     <option value="{{ t }}" {% if selected_type == t %}selected{% endif %}>{{ t }}</option>
@@ -16,6 +16,7 @@
 </form>
 
 {% if events %}
+<div class="table-responsive">
 <table class="admin-table">
   <thead>
     <tr>
@@ -29,19 +30,20 @@
   <tbody>
     {% for event in events %}
     <tr>
-      <td style="white-space:nowrap; font-size:0.8rem; color:#8a8578;">{{ event.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td class="nowrap text-xs text-muted">{{ event.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
       <td><span class="pill pill-event pill-event-{{ event.event_type }}">{{ event.event_type }}</span></td>
-      <td style="font-size:0.85rem;">
+      <td class="text-sm">
         {% if event.user_id %}user #{{ event.user_id }}
-        {% else %}<span style="color:#8a8578;">anonymous</span>{% endif %}
-        <br /><span style="color:#b3ae9f; font-size:0.75rem;">{{ event.session_id[:12] }}…</span>
+        {% else %}<span class="text-muted">anonymous</span>{% endif %}
+        <br /><span class="text-muted-light text-xs">{{ event.session_id[:12] }}…</span>
       </td>
       <td>{% if event.product_id %}#{{ event.product_id }}{% else %}—{% endif %}</td>
-      <td style="font-size:0.8rem; font-family:monospace; color:#555;">{{ event.event_metadata }}</td>
+      <td class="text-xs text-mono text-secondary">{{ event.event_metadata }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="empty-state">
   <h3>No events captured yet</h3>

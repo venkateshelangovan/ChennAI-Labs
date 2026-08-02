@@ -70,7 +70,7 @@
       <input type="text" id="tags" name="tags" value="{{ form.tags or '' }}" placeholder="rag, embeddings, vector-search" />
     </div>
 
-    <button type="submit" class="btn-primary" style="width:auto; padding:11px 24px;">
+    <button type="submit" class="btn-primary btn-inline">
       {% if mode == "create" %}Create course{% else %}Save changes{% endif %}
     </button>
   </form>

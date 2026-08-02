@@ -82,6 +82,8 @@ a {
 }
 
 .btn-primary {
+  display: inline-block;
+  box-sizing: border-box;
   width: 100%;
   padding: 11px;
   border: none;
@@ -90,11 +92,36 @@ a {
   color: #fff;
   font-size: 1rem;
   font-weight: 600;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .btn-primary:hover {
   opacity: 0.92;
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Stage 18: these three had been done ad hoc with inline `style="..."`
+   at each call site (a "+ New course" link, a form submit button, a
+   secondary logout button) — one real instance apiece of the same
+   need ("this button shouldn't stretch to 100% width like the default
+   auth-form button does"), pulled into reusable classes instead. */
+.btn-inline {
+  width: auto;
+}
+
+.btn-secondary {
+  background: #767267;
 }
 
 .auth-switch {
@@ -149,8 +176,35 @@ a {
 .site-nav {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 20px;
   font-size: 0.92rem;
+}
+
+/* Stage 18: an admin's nav has 6 items (Courses, Admin, Events,
+   Recommendations, My Interests, Dashboard, Log out) plus the brand —
+   never a problem on desktop, but with no wrap this ran off the edge
+   of the viewport on a phone-width screen with no way to reach the
+   items pushed off-screen. `flex-wrap` above lets it wrap onto a
+   second line instead of clipping; this just tightens the gap and
+   header padding once it does, so a wrapped nav doesn't look like an
+   accident. */
+@media (max-width: 640px) {
+  .site-header-inner {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .site-nav {
+    gap: 12px 16px;
+    font-size: 0.88rem;
+  }
+
+  .site-main {
+    padding: 24px 16px 48px;
+  }
 }
 
 .site-nav a {
@@ -217,6 +271,7 @@ a {
 .hero-actions {
   margin-top: 24px;
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   justify-content: center;
   align-items: center;
@@ -600,11 +655,22 @@ a {
 
 .admin-form .field-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
 .admin-form .field-row .field {
-  flex: 1;
+  flex: 1 1 160px;
+}
+
+/* Stage 18: admin tables (products, events, recommendations) have as
+   many as 7 columns — fine at desktop width, but with no wrapper a
+   narrow viewport forced the whole page to scroll horizontally
+   (nav included) just to read a table. Scoping the scroll to the
+   table itself keeps the rest of the page usable. */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
 }
 
 .admin-form textarea {
@@ -842,4 +908,57 @@ a {
 .cache-banner-detail {
   color: #8a8578;
   font-weight: 400;
+}
+
+/* ---------------------------------------------------------------------
+   Stage 18: UI/UX final polish — the whole-site design-system pass
+   Stage 13's docstring pointed to. Two kinds of work: (1) a handful of
+   small, real fixes (responsive nav/tables/forms above, stale copy,
+   a global 404, a disabled-button style); (2) this utility-class block,
+   consolidating one-off `style="..."` attributes that had accumulated
+   at individual call sites (mostly in Stage 14's admin trace view,
+   built quickly with inline styles at the time) into named, reusable
+   classes. Same visual result — this is a code-quality/consistency
+   pass, not a redesign.
+--------------------------------------------------------------------- */
+
+.text-muted { color: #8a8578; }
+.text-secondary { color: #555; }
+
+.inline-flex-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.text-muted-light { color: #b3ae9f; }
+.text-mono { font-family: monospace; }
+.text-sm { font-size: 0.85rem; }
+.text-xs { font-size: 0.75rem; }
+.text-strong { font-weight: 600; }
+.nowrap { white-space: nowrap; }
+.mt-tight { margin-top: -12px; }
+.mb-20 { margin-bottom: 20px; }
+.mb-section { margin-bottom: 28px; }
+.truncate-cell { max-width: 280px; overflow-wrap: break-word; }
+
+.admin-section-title {
+  color: var(--color-primary);
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+}
+
+.col-label {
+  width: 220px;
+  font-weight: 600;
+}
+
+.pre-trace {
+  background: #fff;
+  border: 1px solid #e7e4dd;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  margin-bottom: 28px;
 }

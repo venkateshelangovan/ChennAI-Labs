@@ -78,16 +78,17 @@
 {% if not retrieval.is_cold_start %}
 <h2 class="profile-section-title">
   Retrieval preview
-  <span class="profile-caveat-pill">not real recommendations yet</span>
+  <span class="profile-caveat-pill">not the same list as your dashboard</span>
 </h2>
 <p class="profile-explainer">
   This is what a similarity search over the catalog returns right now,
-  built from the query text below (generated from your profile above).
-  It's <strong>not</strong> a recommendation — there's no ranking logic,
-  novelty, or business rules on top of it yet (that's Stage 8), and the
-  embeddings themselves are still a local, non-semantic placeholder
-  (Stage 9 swaps in Mesh). Treat this as proof the retrieval plumbing
-  works, not as picks worth trusting yet.
+  built from the query text below (generated from your profile above),
+  using real Mesh embeddings. It's still <strong>not</strong> your actual
+  "Recommended for you" list — your dashboard additionally excludes
+  courses you've already engaged with, caps how many results can share a
+  category, and only regenerates when Stage 12's trigger rules say
+  something meaningfully changed. Treat this as the raw similarity search
+  underneath your recommendations, not the recommendations themselves.
 </p>
 <details class="profile-query-text">
   <summary>Query text sent to the embedding provider</summary>

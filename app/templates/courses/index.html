@@ -11,15 +11,15 @@
   <form method="get" action="/courses" class="catalog-filters">
     <input
       type="text" name="q" placeholder="Search courses, e.g. \"RAG\" or \"system design\""
-      value="{{ filters.q }}" class="catalog-search"
+      value="{{ filters.q }}" class="catalog-search" aria-label="Search courses"
     />
-    <select name="category">
+    <select name="category" aria-label="Filter by category">
       <option value="">All categories</option>
       {% for c in categories %}
       <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
       {% endfor %}
     </select>
-    <select name="level">
+    <select name="level" aria-label="Filter by level">
       <option value="">All levels</option>
       <option value="beginner" {% if filters.level == "beginner" %}selected{% endif %}>Beginner</option>
       <option value="intermediate" {% if filters.level == "intermediate" %}selected{% endif %}>Intermediate</option>
