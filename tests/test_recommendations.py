@@ -227,6 +227,11 @@ def test_dashboard_shows_personalized_recommendations(client, db_session):
     assert "Engaged On Dashboard" not in response.text
     assert "Matches your recent interest in Robotics Engineering" in response.text
     assert 'data-track-source="recommendations"' in response.text
+    # Stage 13: strategy badge + per-card match indicator, both driven by
+    # real fields already on RecommendationResult/Recommendation — not
+    # new business logic, just surfacing what was already computed.
+    assert "strategy-badge-personalized" in response.text
+    assert "% match" in response.text
 
 
 def test_dashboard_shows_popular_fallback_for_new_user(client, db_session):
@@ -248,3 +253,8 @@ def test_dashboard_shows_popular_fallback_for_new_user(client, db_session):
     # apostrophe in "don't" to &#39; in the rendered HTML, so we check a
     # substring that doesn't straddle it.
     assert "Popular pick" in response.text
+    # Stage 13: the popularity fallback has no similarity score to show
+    # (see Recommendation.similarity's docstring) — the match badge must
+    # not appear, and the strategy badge must read as non-personalized.
+    assert "strategy-badge-popular" in response.text
+    assert "% match" not in response.text

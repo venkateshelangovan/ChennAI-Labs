@@ -780,6 +780,16 @@ a {
   line-height: 1.55;
 }
 
+/* Stage 13: the design language (Section 1) specifies Source Serif for
+   AI-generated narrative text, distinct from the Inter UI font, so a
+   generated explanation visually reads as "written," not "chrome" —
+   defined as --font-narrative since Stage 1 but never actually applied
+   until now. */
+.narration-card .narration-text {
+  font-family: var(--font-narrative);
+  font-size: 1.05rem;
+}
+
 .narration-badge {
   display: inline-block;
   background: #2E2A72;
@@ -790,4 +800,46 @@ a {
   letter-spacing: 0.03em;
   padding: 3px 10px;
   border-radius: 999px;
+}
+
+/* Stage 13: recommendation UX polish */
+
+.strategy-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.strategy-badge-personalized {
+  background: var(--color-accent);
+  color: #4a2f00;
+}
+
+.strategy-badge-popular {
+  background: transparent;
+  color: #8a8578;
+  border: 1px solid #d8d3c6;
+}
+
+.match-badge {
+  display: inline-block;
+  align-self: flex-start;
+  background: #fff3d9;
+  color: #6b4d00;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.cache-banner-detail {
+  color: #8a8578;
+  font-weight: 400;
 }

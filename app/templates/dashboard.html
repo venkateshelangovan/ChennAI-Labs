@@ -10,24 +10,20 @@
 {% if narration.text %}
 <div class="narration-card">
   <span class="narration-badge">AI summary · grounded in the list below</span>
-  <p>{{ narration.text }}</p>
+  <p class="narration-text">{{ narration.text }}</p>
 </div>
 {% endif %}
 
 <div class="home-section-header">
-  <h2>Recommended for you</h2>
+  <h2>
+    Recommended for you
+    {% if recommendations.strategy == "personalized" %}
+    <span class="strategy-badge strategy-badge-personalized">Personalized</span>
+    {% else %}
+    <span class="strategy-badge strategy-badge-popular">Popular picks</span>
+    {% endif %}
+  </h2>
   <a href="/profile">Why these? See your interest profile →</a>
-</div>
-
-<div class="cache-banner">
-  <span>
-    {% if cache_hit %}Showing a cached recommendation from {{ recommendations.generated_at.strftime("%b %d, %H:%M") }} UTC — no AI calls made for this page view.
-    {% else %}Freshly generated just now.{% endif %}
-  </span>
-  <form method="post" action="/dashboard/refresh" class="inline-form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-    <button type="submit" class="link-button">Refresh recommendations</button>
-  </form>
 </div>
 
 {% if recommendations.strategy == "popular_fallback" %}
@@ -41,6 +37,9 @@
 <div class="product-grid" data-track-source="recommendations">
   {% for rec in recommendations.recommendations %}
   <div class="recommend-card">
+    {% if rec.similarity is not none %}
+    <span class="match-badge" title="How closely this matches your recent interests">{{ (rec.similarity * 100) | round | int }}% match</span>
+    {% endif %}
     {{ product_card(rec.product) }}
     <p class="recommend-reason">{{ rec.reason }}</p>
   </div>
@@ -52,6 +51,35 @@
   <p>The catalog doesn't have any active courses to show. Check back soon.</p>
 </div>
 {% endif %}
+
+<div class="cache-banner">
+  <span>
+    {% if cache_hit %}Last updated {{ recommendations.generated_at.strftime("%b %d, %H:%M") }} UTC
+    {% else %}Updated just now{% endif %}
+    <span class="cache-banner-detail">{% if cache_hit %}· served from cache, no AI calls made{% else %}· freshly generated{% endif %}</span>
+  </span>
+  <form method="post" action="/dashboard/refresh" class="inline-form" id="refresh-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <button type="submit" class="link-button" id="refresh-button">Refresh recommendations</button>
+  </form>
+</div>
+
+<script>
+  // Stage 13: Section 15 of the design doc calls for a loading state
+  // wherever recommendation generation can take a few real seconds —
+  // after Stage 12's caching, a manual refresh is the one action left
+  // where that's still true on every click (it always bypasses the
+  // cache). No new JS dependency; this only touches this one form.
+  (function () {
+    var form = document.getElementById("refresh-form");
+    var button = document.getElementById("refresh-button");
+    if (!form || !button) return;
+    form.addEventListener("submit", function () {
+      button.disabled = true;
+      button.textContent = "Refreshing…";
+    });
+  })();
+</script>
 
 <form method="post" action="/logout" class="dashboard-logout">
   <button type="submit" class="btn-primary" style="background:#767267; width:auto; padding:10px 24px;">Log out</button>

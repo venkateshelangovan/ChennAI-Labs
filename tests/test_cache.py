@@ -207,9 +207,9 @@ def test_dashboard_shows_cache_banner_on_second_view(client, db_session):
     second = client.get("/dashboard")
 
     assert first.status_code == 200
-    assert "Freshly generated just now" in first.text
+    assert "Updated just now" in first.text
     assert second.status_code == 200
-    assert "no AI calls made for this page view" in second.text
+    assert "served from cache, no AI calls made" in second.text
 
 
 def test_manual_refresh_endpoint_redirects_to_dashboard(client, db_session):

@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 12 of 20 — trigger + caching rules are live. `/dashboard` no longer recomputes the full pipeline (retrieval, refinement, novelty/diversity, Mesh narration) on every page view — a persisted `RecommendationSnapshot` is served as-is until a deterministic trigger (no snapshot yet / TTL elapsed with real new signal / manual refresh, rate-limited via cooldown) says it's actually time to regenerate.**
+**Status: Stage 13 of 20 — recommendation UX polish is live: the AI narration renders in the design language's intended serif font (loaded for the first time), personalized cards show a real match percentage, a Personalized/Popular badge makes the cold-start transition visible, and the manual refresh action has a proper loading state. No business logic changed — everything shown was already computed by Stages 8-12.**
 
 ### Mesh API integration (Stage 9)
 
@@ -166,7 +166,23 @@ Everything else is a cache hit — including a merely-stale-but-signal-free snap
 
 **Why generation is still synchronous, in-request.** Stage 0 describes a stale-while-revalidate pattern (serve the old value immediately, regenerate in the background via `BackgroundTasks`) — that's explicitly scoped to Stage 15's proactive digest. Through Stage 14, the same section says generation runs synchronously within the triggering request; Stage 12 only decides *whether* to pay that cost on a given request, not how to hide it.
 
-Live-verified end to end against the real seeded catalog and a mock Mesh server, all six trigger outcomes, using the actual Mesh call count observed in the mock server's log as ground truth (not just HTTP status codes): first-ever dashboard view for a new user made exactly one Mesh call (`no_snapshot`); an immediate second view made zero (`fresh`); pushing the snapshot's `generated_at` back 25 hours with no new events still made zero (`stale_but_no_signal`); adding 5 events after that same old snapshot made one (`ttl_and_signal`); a manual refresh immediately after that made zero (`manual_refresh_on_cooldown`); and a manual refresh after simulating 90 elapsed seconds made one (`manual_refresh`) — confirmed by the dashboard's cache banner (`Freshly generated just now` vs. `...no AI calls made for this page view`) matching the Mesh call count in every case.
+Live-verified end to end against the real seeded catalog and a mock Mesh server, all six trigger outcomes, using the actual Mesh call count observed in the mock server's log as ground truth (not just HTTP status codes): first-ever dashboard view for a new user made exactly one Mesh call (`no_snapshot`); an immediate second view made zero (`fresh`); pushing the snapshot's `generated_at` back 25 hours with no new events still made zero (`stale_but_no_signal`); adding 5 events after that same old snapshot made one (`ttl_and_signal`); a manual refresh immediately after that made zero (`manual_refresh_on_cooldown`); and a manual refresh after simulating 90 elapsed seconds made one (`manual_refresh`) — confirmed by the dashboard's cache banner (`Updated just now` vs. `...served from cache, no AI calls made`) matching the Mesh call count in every case.
+
+## Recommendation UX polish (Stage 13)
+
+Scoped narrowly to the dashboard/recommendation experience on purpose — Stage 18 ("UI/UX final polish") is the whole-site design-system pass; Stage 13 only touches what a user sees around their actual recommendation. No business logic changed: every value shown here (similarity, strategy, generation timestamp) was already computed by Stages 8-12, just not surfaced before.
+
+**A latent gap, fixed first.** `main.css` has defined `--font-ui` (Inter) and `--font-narrative` (Source Serif 4) since Stage 1, but no page ever actually loaded those font files — every page had silently been rendering system-font fallbacks the whole time. `base.html` now links Google Fonts for both; without this, Stage 13's one narrative-font decision below would have had no visible effect at all.
+
+**What's new, in order of what a user actually sees:**
+
+- The AI narration (Stage 10) now renders in Source Serif 4, not the UI sans-serif — exactly the "generated explanation reads as written, not chrome" distinction the Stage 0 design language called for.
+- A "Personalized" or "Popular picks" badge sits right next to the "Recommended for you" heading, so the cold-start → personalized transition (Journey 1) is visible at a glance, not just inferable from the explainer copy underneath.
+- Each personalized card shows a "`NN`% match" badge, built from `Recommendation.similarity` — a field the pipeline has computed since Stage 8 but never displayed. Absent entirely on the popularity fallback, where there's honestly no similarity to show (`similarity=None`).
+- The Stage 12 cache banner's copy shifted from a debug-flavored string ("no AI calls made for this page view") to a two-tier line: a real timestamp as the primary message, the cache mechanic as a smaller secondary note — still fully transparent, just no longer reading like an internal log line on a page a real learner would see.
+- The manual refresh button gets a lightweight loading state (vanilla JS, no new dependency — disables itself and reads "Refreshing…" while the POST is in flight). This is Stage 0 Section 15's explicit requirement ("shown with a loading state") for the one action left, post-Stage-12, where generation still happens synchronously on every click.
+
+Live-verified against the real seeded catalog and mock Mesh server: the font stylesheet link resolves with the correct `family=Inter...Source+Serif+4...` query string, and a real personalized dashboard render showed genuine match badges (`79% match`, `74% match`, `73% match`, taken directly from that user's actual retrieval similarity scores) alongside the `Personalized` badge and the serif-styled narration text.
 
 ## Running tests
 
@@ -174,7 +190,7 @@ Live-verified end to end against the real seeded catalog and a mock Mesh server,
 pytest
 ```
 
-162 tests as of Stage 12: Stage 11's suite (143) plus 19 covering the trigger + cache — `tests/test_trigger.py`'s deterministic decision logic (no snapshot, fresh, stale-with/without-signal, manual refresh with/without cooldown, events before the snapshot don't count as new signal), and `tests/test_cache.py`'s end-to-end integration tests, which assert actual CALL COUNTS on `generate_recommendations`/`generate_narration` (not just final content) to prove a cache hit really does skip the expensive pipeline — plus a live-Product-refetch test (a cached recommendation reflects a price change made after the snapshot) and an all-cached-products-archived fallback test.
+162 tests as of Stage 13 (unchanged count from Stage 12 — this stage extended existing dashboard-rendering assertions with the new UI markers rather than adding new test functions): Stage 11's suite (143) plus 19 covering the trigger + cache — `tests/test_trigger.py`'s deterministic decision logic (no snapshot, fresh, stale-with/without-signal, manual refresh with/without cooldown, events before the snapshot don't count as new signal), and `tests/test_cache.py`'s end-to-end integration tests, which assert actual CALL COUNTS on `generate_recommendations`/`generate_narration` (not just final content) to prove a cache hit really does skip the expensive pipeline — plus a live-Product-refetch test (a cached recommendation reflects a price change made after the snapshot) and an all-cached-products-archived fallback test.
 
 ## Environment variables
 
