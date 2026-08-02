@@ -1,104 +1,165 @@
 /*
-  Brand tokens only, per Stage 0 design language. Real page styling
-  (catalog, product cards, recommendation panel) is built starting
-  Stage 3 and polished at Stage 18 — this file just seeds the palette
-  so every later template can reference the same variables instead of
-  hardcoding colors.
+  ChennAI Labs — design system.
+
+  v2 (post-launch polish pass): every selector below is unchanged in
+  name from the original build, so no template or test needed to
+  change for this pass — only the values did. Deeper indigo/amber
+  palette with real gradient + elevation tokens, softer neutral
+  surfaces, a proper shadow/radius scale, smoother motion, and a more
+  confident type scale, applied consistently across the marketing
+  pages, the catalog, the dashboard, and the admin console.
 */
 :root {
-  --color-primary: #2E2A72;   /* deep indigo */
-  --color-accent: #F2A93B;    /* warm amber */
-  --color-bg: #F7F6F3;
-  --color-text: #1A1A1A;
+  --color-primary: #2E2A72;      /* deep indigo */
+  --color-primary-dark: #201c56;
+  --color-primary-light: #4F4AA8;
+  --color-accent: #F2A93B;       /* warm amber */
+  --color-accent-dark: #D98F1E;
+  --gradient-primary: linear-gradient(135deg, #2E2A72 0%, #4F4AA8 55%, #5B4FCF 100%);
+  --gradient-accent: linear-gradient(135deg, #F2A93B 0%, #E8963F 100%);
+
+  --color-bg: #FAF9F6;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F4F2EC;
+  --color-border: #E8E4DA;
+  --color-border-soft: #F0EDE5;
+  --color-text: #1C1B1F;
+  --color-text-muted: #6B6659;
+  --color-text-faint: #A39D8C;
+
   --font-ui: "Inter", system-ui, -apple-system, sans-serif;
   --font-narrative: "Source Serif 4", Georgia, serif;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-full: 999px;
+
+  --shadow-xs: 0 1px 2px rgba(23, 20, 60, 0.05);
+  --shadow-sm: 0 2px 8px rgba(23, 20, 60, 0.06), 0 1px 2px rgba(23, 20, 60, 0.05);
+  --shadow-md: 0 8px 24px rgba(23, 20, 60, 0.10), 0 2px 6px rgba(23, 20, 60, 0.06);
+  --shadow-lg: 0 20px 48px rgba(23, 20, 60, 0.16), 0 4px 12px rgba(23, 20, 60, 0.08);
+  --shadow-glow: 0 8px 28px rgba(46, 42, 114, 0.28);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: 180ms var(--ease);
+}
+
+* { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
   font-family: var(--font-ui);
   background: var(--color-bg);
+  background-image:
+    radial-gradient(1200px 500px at 90% -10%, rgba(46, 42, 114, 0.05), transparent),
+    radial-gradient(900px 420px at -10% 0%, rgba(242, 169, 59, 0.06), transparent);
+  background-attachment: fixed;
   color: var(--color-text);
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 a {
   color: var(--color-primary);
 }
 
-/* Stage 2: minimal auth-form styling. Real design-system work happens
-   in Stage 18 — this just keeps the login/register screens from
-   looking like an unstyled HTML form while we build the rest. */
+h1, h2, h3 {
+  letter-spacing: -0.015em;
+}
+
+/* ------------------------------------------------------------------
+   Auth screens
+------------------------------------------------------------------- */
 
 .auth-shell {
-  max-width: 420px;
-  margin: 10vh auto;
+  max-width: 440px;
+  margin: 8vh auto;
   padding: 0 24px;
 }
 
 .auth-card {
-  background: #fff;
-  border: 1px solid #e7e4dd;
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  box-shadow: var(--shadow-md);
 }
 
 .auth-card h1 {
-  margin: 0 0 4px;
-  font-size: 1.5rem;
+  margin: 0 0 6px;
+  font-size: 1.6rem;
   color: var(--color-primary);
 }
 
 .auth-card p.subtitle {
-  margin: 0 0 24px;
-  color: #767267;
-  font-size: 0.9rem;
+  margin: 0 0 28px;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
 }
 
 .field {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .field label {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
+  color: #3a362e;
 }
 
 .field input {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid #d8d4cb;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 1rem;
   font-family: inherit;
+  background: var(--color-surface);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
 
 .field input:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 4px rgba(46, 42, 114, 0.12);
 }
 
 .btn-primary {
   display: inline-block;
   box-sizing: border-box;
   width: 100%;
-  padding: 11px;
+  padding: 12px 16px;
   border: none;
-  border-radius: 8px;
-  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--gradient-primary);
   color: #fff;
   font-size: 1rem;
   font-weight: 600;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
+  box-shadow: var(--shadow-glow);
+  transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
 }
 
 .btn-primary:hover {
-  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(46, 42, 114, 0.34);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-primary:focus-visible {
@@ -109,33 +170,38 @@ a {
 .btn-primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
-/* Stage 18: these three had been done ad hoc with inline `style="..."`
-   at each call site (a "+ New course" link, a form submit button, a
-   secondary logout button) — one real instance apiece of the same
-   need ("this button shouldn't stretch to 100% width like the default
-   auth-form button does"), pulled into reusable classes instead. */
 .btn-inline {
   width: auto;
 }
 
 .btn-secondary {
-  background: #767267;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1.5px solid var(--color-border);
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  border-color: var(--color-text-faint);
+  box-shadow: var(--shadow-xs);
 }
 
 .auth-switch {
-  margin-top: 20px;
+  margin-top: 22px;
   font-size: 0.9rem;
   text-align: center;
-  color: #767267;
+  color: var(--color-text-muted);
 }
 
 .error-list {
-  background: #fdecec;
-  border: 1px solid #f3b9b9;
-  color: #8a1f1f;
-  border-radius: 8px;
+  background: #FDF0EF;
+  border: 1px solid #F3C6C2;
+  color: #9A2E23;
+  border-radius: var(--radius-sm);
   padding: 12px 16px;
   margin-bottom: 20px;
   font-size: 0.9rem;
@@ -146,29 +212,37 @@ a {
   padding-left: 18px;
 }
 
-/* ---------------------------------------------------------------------
-   Stage 3: site nav, homepage, catalog, product detail, admin CRUD.
-   Still not the Stage 18 final-polish pass — this is "looks like a
-   real product," not "pixel-perfect design system."
---------------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Header / nav
+------------------------------------------------------------------- */
 
 .site-header {
-  border-bottom: 1px solid #e7e4dd;
-  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: rgba(250, 249, 246, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .site-header-inner {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 18px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
+/* Plain solid color, not a background-clip:text gradient — renders
+   correctly everywhere, including HTML-to-PDF pipelines that don't
+   support the gradient-text trick (this repo's own screenshot
+   generation being a real example of exactly that gap). */
 .brand {
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-weight: 800;
+  font-size: 1.18rem;
+  letter-spacing: -0.02em;
   color: var(--color-primary);
   text-decoration: none;
 }
@@ -178,18 +252,10 @@ a {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 20px;
+  gap: 22px;
   font-size: 0.92rem;
 }
 
-/* Stage 18: an admin's nav has 6 items (Courses, Admin, Events,
-   Recommendations, My Interests, Dashboard, Log out) plus the brand —
-   never a problem on desktop, but with no wrap this ran off the edge
-   of the viewport on a phone-width screen with no way to reach the
-   items pushed off-screen. `flex-wrap` above lets it wrap onto a
-   second line instead of clipping; this just tightens the gap and
-   header padding once it does, so a wrapped nav doesn't look like an
-   accident. */
 @media (max-width: 640px) {
   .site-header-inner {
     flex-wrap: wrap;
@@ -208,8 +274,10 @@ a {
 }
 
 .site-nav a {
-  color: var(--color-text);
+  color: #4a463c;
   text-decoration: none;
+  font-weight: 500;
+  transition: color var(--transition);
 }
 
 .site-nav a:hover {
@@ -217,10 +285,18 @@ a {
 }
 
 .nav-cta {
-  background: var(--color-primary);
+  background: var(--gradient-primary);
   color: #fff !important;
-  padding: 7px 14px;
-  border-radius: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(46, 42, 114, 0.22);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.nav-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(46, 42, 114, 0.3);
 }
 
 .nav-logout-form {
@@ -232,47 +308,82 @@ a {
   border: none;
   padding: 0;
   font: inherit;
-  color: var(--color-text);
+  color: #4a463c;
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color var(--transition);
+}
+
+.link-button:hover {
+  color: var(--color-primary);
 }
 
 .link-button-danger {
-  color: #8a1f1f;
+  color: #9A2E23;
 }
 
 .site-main {
-  max-width: 1100px;
+  flex: 1;
+  max-width: 1120px;
+  width: 100%;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 40px 24px 72px;
 }
 
-/* Homepage hero */
+/* ------------------------------------------------------------------
+   Homepage hero
+------------------------------------------------------------------- */
 
 .hero {
-  max-width: 720px;
-  margin: 6vh auto 56px;
+  position: relative;
+  max-width: 100%;
+  margin: 0 auto 64px;
   text-align: center;
+  padding: 72px 40px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-primary);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 300px at 15% 0%, rgba(242, 169, 59, 0.35), transparent 60%),
+    radial-gradient(500px 260px at 100% 100%, rgba(255, 255, 255, 0.14), transparent 60%);
+  pointer-events: none;
 }
 
 .hero h1 {
-  font-size: 2.25rem;
-  color: var(--color-primary);
-  line-height: 1.2;
-  margin-bottom: 16px;
+  position: relative;
+  font-size: 2.75rem;
+  color: #fff;
+  line-height: 1.15;
+  margin: 0 0 20px;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+  letter-spacing: -0.03em;
 }
 
 .hero p {
-  color: #555;
-  font-size: 1.05rem;
-  line-height: 1.6;
+  position: relative;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 1.08rem;
+  line-height: 1.65;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .hero-actions {
-  margin-top: 24px;
+  position: relative;
+  margin-top: 32px;
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 22px;
   justify-content: center;
   align-items: center;
 }
@@ -280,95 +391,128 @@ a {
 .hero-btn {
   display: inline-block;
   width: auto;
-  padding: 12px 28px;
+  padding: 14px 32px;
   text-decoration: none;
+  background: var(--color-accent);
+  color: #3a2400 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.hero-btn:hover {
+  background: var(--color-accent-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
 }
 
 .hero-link {
-  color: var(--color-text);
+  color: #fff;
   text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
 }
 
 .home-section-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .home-section-header h2 {
   color: var(--color-primary);
   margin: 0;
+  font-size: 1.4rem;
 }
 
 .home-section-header a {
   font-size: 0.9rem;
   text-decoration: none;
+  font-weight: 600;
+  color: var(--color-primary);
 }
 
-/* Product grid + card */
+/* ------------------------------------------------------------------
+   Product grid + card
+------------------------------------------------------------------- */
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 24px;
 }
 
 .product-card {
   display: block;
-  background: #fff;
-  border: 1px solid #e7e4dd;
-  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
   overflow: hidden;
   text-decoration: none;
   color: inherit;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
 }
 
 .product-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-4px);
+  border-color: transparent;
 }
 
 .product-card-thumb {
-  height: 96px;
+  height: 104px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--color-primary), #4a45a8);
+  position: relative;
+  background: var(--gradient-primary);
   color: #fff;
-  font-weight: 700;
-  font-size: 1.4rem;
-  letter-spacing: 0.05em;
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+}
+
+.product-card-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120px 80px at 85% 0%, rgba(242, 169, 59, 0.55), transparent 70%);
+}
+
+.product-card-thumb span {
+  position: relative;
 }
 
 .product-card-body {
-  padding: 16px;
+  padding: 18px 18px 20px;
 }
 
 .product-card-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .product-card-category {
   font-size: 0.78rem;
-  color: #8a8578;
+  color: var(--color-text-faint);
+  font-weight: 500;
 }
 
 .product-card h3 {
   margin: 0 0 8px;
-  font-size: 1.05rem;
+  font-size: 1.06rem;
   color: var(--color-text);
+  line-height: 1.35;
 }
 
 .product-card-desc {
   font-size: 0.88rem;
-  color: #666;
-  line-height: 1.45;
-  margin: 0 0 14px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin: 0 0 16px;
 }
 
 .product-card-footer {
@@ -376,7 +520,9 @@ a {
   gap: 14px;
   align-items: center;
   font-size: 0.85rem;
-  color: #555;
+  color: var(--color-text-muted);
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-soft);
 }
 
 .product-card-price {
@@ -385,40 +531,45 @@ a {
 }
 
 .product-card-rating {
-  color: #b8860b;
+  color: #B8860B;
+  font-weight: 600;
 }
 
-/* Pills / badges */
+/* ------------------------------------------------------------------
+   Pills / badges
+------------------------------------------------------------------- */
 
 .pill {
   display: inline-block;
-  padding: 3px 10px;
-  border-radius: 999px;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: capitalize;
+  letter-spacing: 0.01em;
 }
 
-.pill-level.pill-beginner { background: #e6f4ea; color: #1e7a35; }
-.pill-level.pill-intermediate { background: #fff3d9; color: #9a6a00; }
-.pill-level.pill-advanced { background: #fde3e3; color: #a3231f; }
+.pill-level.pill-beginner { background: #E3F5E9; color: #1B7A3D; }
+.pill-level.pill-intermediate { background: #FCF0D6; color: #93650A; }
+.pill-level.pill-advanced { background: #FBE4E1; color: #A32E22; }
 
-.pill-active { background: #e6f4ea; color: #1e7a35; }
-.pill-archived { background: #eee; color: #777; }
-.pill-failed { background: #fde3e3; color: #a3231f; }
-.pill-pending { background: #fff3d9; color: #9a6a00; }
+.pill-active { background: #E3F5E9; color: #1B7A3D; }
+.pill-archived { background: #EEECE5; color: #6B6659; }
+.pill-failed { background: #FBE4E1; color: #A32E22; }
+.pill-pending { background: #FCF0D6; color: #93650A; }
 
 .sync-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff3d9;
-  border: 1px solid #f0d48a;
+  background: #FCF0D6;
+  border: 1px solid #F0D9A0;
   color: #6b4d00;
-  border-radius: 8px;
-  padding: 10px 16px;
-  margin-bottom: 20px;
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  margin-bottom: 22px;
   font-size: 0.9rem;
+  box-shadow: var(--shadow-xs);
 }
 
 .sync-banner .link-button {
@@ -426,19 +577,16 @@ a {
   font-weight: 600;
 }
 
-/* Stage 12: cache-hit/refresh indicator on /dashboard — neutral, not a
-   warning color like .sync-banner, since serving from cache is the
-   expected, desired behavior, not a problem needing attention. */
 .cache-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f2f1ec;
-  border: 1px solid #ded9cc;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   color: #5c584c;
-  border-radius: 8px;
-  padding: 10px 16px;
-  margin-bottom: 20px;
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  margin-bottom: 22px;
   font-size: 0.85rem;
 }
 
@@ -449,88 +597,108 @@ a {
 
 .event-total {
   font-size: 0.85rem;
-  color: #8a8578;
+  color: var(--color-text-faint);
 }
 
-.pill-event { background: #eee; color: #444; }
-.pill-event-view { background: #e6f0fd; color: #1a4fa0; }
-.pill-event-click { background: #e6f4ea; color: #1e7a35; }
-.pill-event-search { background: #f3e6fd; color: #6a1ba0; }
-.pill-event-category_view { background: #fdf1e6; color: #a05a1a; }
-.pill-event-time_spent { background: #fff3d9; color: #9a6a00; }
+.pill-event { background: #EEECE5; color: #444; }
+.pill-event-view { background: #E3EDFD; color: #1A4FA0; }
+.pill-event-click { background: #E3F5E9; color: #1B7A3D; }
+.pill-event-search { background: #F1E3FD; color: #6A1BA0; }
+.pill-event-category_view { background: #FBEADC; color: #A05A1A; }
+.pill-event-time_spent { background: #FCF0D6; color: #93650A; }
 
-/* Catalog page */
+/* ------------------------------------------------------------------
+   Catalog page
+------------------------------------------------------------------- */
 
 .catalog-header h1 {
   color: var(--color-primary);
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  font-size: 1.9rem;
 }
 
 .catalog-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .catalog-search {
   flex: 1 1 260px;
-  padding: 10px 12px;
-  border: 1px solid #d8d4cb;
-  border-radius: 8px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 0.95rem;
+  background: var(--color-surface);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.catalog-search:focus {
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 4px rgba(46, 42, 114, 0.1);
 }
 
 .catalog-filters select {
-  padding: 10px 12px;
-  border: 1px solid #d8d4cb;
-  border-radius: 8px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 0.95rem;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .catalog-filter-btn {
   width: auto;
-  padding: 10px 20px;
+  padding: 11px 22px;
 }
 
-/* Empty state */
+/* ------------------------------------------------------------------
+   Empty state
+------------------------------------------------------------------- */
 
 .empty-state {
   text-align: center;
-  padding: 64px 24px;
-  color: #777;
+  padding: 72px 24px;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
 }
 
 .empty-state h3 {
   color: var(--color-text);
   margin-bottom: 8px;
+  font-size: 1.15rem;
 }
 
-/* Product detail */
+/* ------------------------------------------------------------------
+   Product detail
+------------------------------------------------------------------- */
 
 .product-detail {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 40px;
+  grid-template-columns: 1fr 300px;
+  gap: 44px;
   align-items: start;
 }
 
 .breadcrumb {
   font-size: 0.85rem;
-  color: #8a8578;
-  margin-bottom: 12px;
+  color: var(--color-text-faint);
+  margin-bottom: 14px;
   display: block;
 }
 
 .product-detail h1 {
   color: var(--color-primary);
-  margin: 12px 0 16px;
+  margin: 12px 0 18px;
+  font-size: 2rem;
 }
 
 .product-detail-desc {
-  color: #444;
-  line-height: 1.65;
+  color: #3a362e;
+  line-height: 1.7;
   white-space: pre-line;
 }
 
@@ -538,106 +706,137 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 16px 0;
+  margin: 18px 0;
 }
 
 .tag {
-  background: #efece3;
-  color: #555;
-  padding: 4px 10px;
-  border-radius: 999px;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
   font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .product-detail-facts {
-  margin-top: 24px;
+  margin-top: 28px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
 .product-detail-facts dt {
-  font-size: 0.78rem;
-  color: #8a8578;
+  font-size: 0.76rem;
+  color: var(--color-text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.product-detail-facts dd {
-  margin: 4px 0 0;
+  letter-spacing: 0.04em;
   font-weight: 600;
 }
 
+.product-detail-facts dd {
+  margin: 5px 0 0;
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+
 .price-card {
-  border: 1px solid #e7e4dd;
-  border-radius: 12px;
-  padding: 24px;
-  background: #fff;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  padding: 28px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
   position: sticky;
-  top: 24px;
+  top: 96px;
 }
 
 .price-card-amount {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
   color: var(--color-primary);
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  letter-spacing: -0.02em;
 }
 
 .price-card-note {
   font-size: 0.78rem;
-  color: #8a8578;
-  margin-top: 10px;
+  color: var(--color-text-faint);
+  margin-top: 12px;
+  text-align: center;
 }
 
 @media (max-width: 720px) {
   .product-detail {
     grid-template-columns: 1fr;
   }
+
+  .price-card {
+    position: static;
+  }
 }
 
-/* Admin */
+/* ------------------------------------------------------------------
+   Admin
+------------------------------------------------------------------- */
 
 .admin-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .admin-header h1 {
   color: var(--color-primary);
   margin: 0;
+  font-size: 1.7rem;
 }
 
 .admin-table {
   width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #e7e4dd;
-  border-radius: 12px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .admin-table th {
   text-align: left;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #8a8578;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e7e4dd;
+  letter-spacing: 0.05em;
+  color: var(--color-text-faint);
+  font-weight: 700;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-alt);
 }
 
 .admin-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0eee7;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border-soft);
   font-size: 0.9rem;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr {
+  transition: background var(--transition);
+}
+
+.admin-table tbody tr:hover {
+  background: var(--color-surface-alt);
 }
 
 .admin-table-actions {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .inline-form {
@@ -645,12 +844,13 @@ a {
 }
 
 .admin-form-shell {
-  max-width: 640px;
+  max-width: 660px;
 }
 
 .admin-form-shell h1 {
   color: var(--color-primary);
-  margin: 12px 0 20px;
+  margin: 12px 0 24px;
+  font-size: 1.6rem;
 }
 
 .admin-form .field-row {
@@ -663,119 +863,129 @@ a {
   flex: 1 1 160px;
 }
 
-/* Stage 18: admin tables (products, events, recommendations) have as
-   many as 7 columns — fine at desktop width, but with no wrapper a
-   narrow viewport forced the whole page to scroll horizontally
-   (nav included) just to read a table. Scoping the scroll to the
-   table itself keeps the rest of the page usable. */
 .table-responsive {
   width: 100%;
   overflow-x: auto;
+  border-radius: var(--radius-md);
 }
 
 .admin-form textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid #d8d4cb;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 1rem;
   resize: vertical;
+  background: var(--color-surface);
+}
+
+.admin-form textarea:focus, .admin-form select:focus {
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 4px rgba(46, 42, 114, 0.1);
 }
 
 .admin-form select {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid #d8d4cb;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 1rem;
-  background: #fff;
+  background: var(--color-surface);
 }
 
-/* Stage 6: interest profile */
+/* ------------------------------------------------------------------
+   Interest profile
+------------------------------------------------------------------- */
 
 .profile-explainer {
-  color: #767267;
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
   max-width: 640px;
-  margin-bottom: 32px;
-  line-height: 1.55;
+  margin-bottom: 36px;
+  line-height: 1.6;
 }
 
 .profile-section-title {
   color: var(--color-primary);
-  font-size: 1.1rem;
-  margin: 0 0 16px;
+  font-size: 1.2rem;
+  margin: 0 0 18px;
 }
 
 .profile-bars {
-  margin-bottom: 36px;
+  margin-bottom: 40px;
 }
 
 .profile-bar-row {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .profile-bar-label {
   display: flex;
   justify-content: space-between;
   font-size: 0.88rem;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
+  font-weight: 500;
 }
 
 .profile-bar-meta {
-  color: #8a8578;
+  color: var(--color-text-faint);
+  font-weight: 400;
 }
 
 .profile-bar-track {
-  background: #efece3;
-  border-radius: 999px;
-  height: 8px;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-full);
+  height: 9px;
   overflow: hidden;
 }
 
 .profile-bar-fill {
-  background: var(--color-primary);
+  background: var(--gradient-primary);
   height: 100%;
+  border-radius: var(--radius-full);
 }
 
 .profile-table {
-  margin-bottom: 36px;
+  margin-bottom: 40px;
 }
 
 .profile-tag-list {
-  margin-bottom: 36px;
+  margin-bottom: 40px;
 }
 
 .profile-search-list {
-  color: #555;
+  color: #3a362e;
   font-size: 0.9rem;
-  line-height: 1.8;
+  line-height: 1.85;
   padding-left: 18px;
 }
 
-/* Stage 7: retrieval preview */
+/* ------------------------------------------------------------------
+   Retrieval preview
+------------------------------------------------------------------- */
 
 .profile-caveat-pill {
   display: inline-block;
-  background: #fdf1e6;
-  color: #a05a1a;
-  font-size: 0.68rem;
+  background: #FBEADC;
+  color: #A05A1A;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 3px 10px;
-  border-radius: 999px;
+  letter-spacing: 0.04em;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
   vertical-align: middle;
   margin-left: 10px;
 }
 
 .profile-query-text {
-  margin-bottom: 20px;
+  margin-bottom: 22px;
   font-size: 0.85rem;
-  color: #555;
+  color: #3a362e;
 }
 
 .profile-query-text summary {
@@ -786,30 +996,33 @@ a {
 
 .profile-query-text code {
   display: block;
-  margin-top: 8px;
-  padding: 12px 14px;
-  background: #f3f1ea;
-  border-radius: 8px;
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
   font-size: 0.8rem;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Stage 8: dashboard recommendations */
+/* ------------------------------------------------------------------
+   Dashboard / recommendations
+------------------------------------------------------------------- */
 
 .dashboard-greeting {
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
 .dashboard-greeting h1 {
   color: var(--color-primary);
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+  font-size: 1.8rem;
 }
 
 .dashboard-greeting .subtitle {
-  color: #767267;
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
   margin: 0;
 }
 
@@ -819,111 +1032,104 @@ a {
 }
 
 .recommend-reason {
-  margin: 10px 2px 0;
+  margin: 12px 2px 0;
   font-size: 0.8rem;
-  color: #8a8578;
+  color: var(--color-text-faint);
   font-style: italic;
 }
 
 .dashboard-logout {
-  margin-top: 40px;
+  margin-top: 44px;
 }
 
-/* Stage 10: recommendation narration */
+/* ------------------------------------------------------------------
+   Recommendation narration
+------------------------------------------------------------------- */
 
 .narration-card {
-  background: #f3f1fb;
-  border: 1px solid #d9d3f0;
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 24px;
+  position: relative;
+  background: linear-gradient(135deg, #F3F1FD 0%, #EDEAFB 100%);
+  border: 1px solid #DCD5F5;
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-xs);
 }
 
 .narration-card p {
-  margin: 8px 0 0;
-  color: #2E2A72;
+  margin: 10px 0 0;
+  color: var(--color-primary-dark);
   font-size: 0.95rem;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
-/* Stage 13: the design language (Section 1) specifies Source Serif for
-   AI-generated narrative text, distinct from the Inter UI font, so a
-   generated explanation visually reads as "written," not "chrome" —
-   defined as --font-narrative since Stage 1 but never actually applied
-   until now. */
 .narration-card .narration-text {
   font-family: var(--font-narrative);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
 }
 
 .narration-badge {
   display: inline-block;
-  background: #2E2A72;
+  background: var(--gradient-primary);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 3px 10px;
-  border-radius: 999px;
+  letter-spacing: 0.04em;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
 }
 
-/* Stage 13: recommendation UX polish */
+/* ------------------------------------------------------------------
+   Recommendation UX polish
+------------------------------------------------------------------- */
 
 .strategy-badge {
   display: inline-block;
-  font-size: 0.65rem;
+  font-size: 0.63rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 3px 10px;
-  border-radius: 999px;
+  letter-spacing: 0.04em;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
   margin-left: 10px;
   vertical-align: middle;
 }
 
 .strategy-badge-personalized {
-  background: var(--color-accent);
+  background: var(--gradient-accent);
   color: #4a2f00;
 }
 
 .strategy-badge-popular {
   background: transparent;
-  color: #8a8578;
-  border: 1px solid #d8d3c6;
+  color: var(--color-text-faint);
+  border: 1px solid var(--color-border);
 }
 
 .match-badge {
   display: inline-block;
   align-self: flex-start;
-  background: #fff3d9;
+  background: #FCF0D6;
   color: #6b4d00;
   font-size: 0.7rem;
   font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 999px;
-  margin-bottom: 8px;
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
+  margin-bottom: 10px;
 }
 
 .cache-banner-detail {
-  color: #8a8578;
+  color: var(--color-text-faint);
   font-weight: 400;
 }
 
-/* ---------------------------------------------------------------------
-   Stage 18: UI/UX final polish — the whole-site design-system pass
-   Stage 13's docstring pointed to. Two kinds of work: (1) a handful of
-   small, real fixes (responsive nav/tables/forms above, stale copy,
-   a global 404, a disabled-button style); (2) this utility-class block,
-   consolidating one-off `style="..."` attributes that had accumulated
-   at individual call sites (mostly in Stage 14's admin trace view,
-   built quickly with inline styles at the time) into named, reusable
-   classes. Same visual result — this is a code-quality/consistency
-   pass, not a redesign.
---------------------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   Utility classes (shared across admin views)
+------------------------------------------------------------------- */
 
-.text-muted { color: #8a8578; }
-.text-secondary { color: #555; }
+.text-muted { color: var(--color-text-muted); }
+.text-secondary { color: #3a362e; }
 
 .inline-flex-row {
   display: flex;
@@ -931,8 +1137,8 @@ a {
   flex-wrap: wrap;
   gap: 14px;
 }
-.text-muted-light { color: #b3ae9f; }
-.text-mono { font-family: monospace; }
+.text-muted-light { color: var(--color-text-faint); }
+.text-mono { font-family: "SFMono-Regular", Consolas, monospace; }
 .text-sm { font-size: 0.85rem; }
 .text-xs { font-size: 0.75rem; }
 .text-strong { font-weight: 600; }
@@ -944,8 +1150,8 @@ a {
 
 .admin-section-title {
   color: var(--color-primary);
-  font-size: 1.05rem;
-  margin: 0 0 12px;
+  font-size: 1.08rem;
+  margin: 0 0 14px;
 }
 
 .col-label {
@@ -954,11 +1160,48 @@ a {
 }
 
 .pre-trace {
-  background: #fff;
-  border: 1px solid #e7e4dd;
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 18px;
   font-size: 0.75rem;
   overflow-x: auto;
   margin-bottom: 28px;
+}
+
+/* ------------------------------------------------------------------
+   Footer
+------------------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--color-border-soft);
+  margin-top: 40px;
+}
+
+.site-footer-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--color-text-faint);
+}
+
+.site-footer a {
+  color: var(--color-text-faint);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--color-primary);
+}
+
+.site-footer-links {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
 }
