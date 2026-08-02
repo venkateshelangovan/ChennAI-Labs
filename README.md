@@ -4,7 +4,37 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 18 of 20 — UI/UX final polish. 207 pytest tests. A whole-site design-system pass: scattered inline `style="..."` attributes (accumulated from Stage 3 onward) consolidated into named CSS utility classes, responsive gaps closed (nav overflow, table horizontal-scroll, form field wrapping), a branded 404 page for undefined routes, favicon/meta description, a11y labels on filter controls, and one real stale-copy bug fixed on `/profile` (text describing a Stage 7-era system state that had been factually wrong since Stage 8/9 shipped). See "UI/UX final polish" below.**
+**Status: Stage 19 of 20 — README & docs. See "Documentation" below for what this stage added: a screenshot gallery of the actually-running app, `docs/ARCHITECTURE.md` (the Stage 0 design doc, now checked into the repo), and `docs/REQUIREMENTS_MAPPING.md` (challenge requirement → real file). Stage 18 (UI/UX final polish) landed 207 pytest tests and a whole-site design-system pass — see "UI/UX final polish" below.**
+
+## What this is, in 60 seconds
+
+A learner browses a technical course catalog (DSA/interview prep, math for ML, and the full applied-AI ladder). Every view, search, and click is captured non-blockingly and turned into a per-user interest profile that decays over time rather than treating a three-month-old click the same as this morning's. That profile drives a real semantic retrieval step against a vector store, which feeds a deterministic ranking pipeline (novelty, category diversity, cold-start fallback) — and only *after* that ranking is final does an LLM call (via Mesh, the challenge's required AI gateway) write one grounded sentence explaining the picks, with every citation checked against the real recommendation list before it's ever shown. Recommendations are cached as durable rows, not recomputed on every page load, and only regenerate when a deterministic trigger rule says something meaningfully changed — the AI call happens when it's warranted, not on every request. An admin view exposes the full trace behind any user's current recommendation: which retrieval attempt fired, what the candidate pool looked like before novelty/diversity filtering, and the raw (pre-validation) model output.
+
+Built one stage at a time against [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the original Stage 0 design document, unedited), with explicit approval gating every stage. [`docs/REQUIREMENTS_MAPPING.md`](docs/REQUIREMENTS_MAPPING.md) maps every challenge requirement to the file it actually lives in.
+
+## Screenshots
+
+Real renders of the actually-running app (server-rendered HTML → PDF via WeasyPrint → PNG — this sandbox has no headless-browser binary reachable through its network allowlist, so this is a substitute for a live Chromium screenshot, not a mockup; every pixel below is genuine output from `app/templates/`, not hand-drawn). Full-size images live in [`docs/screenshots/`](docs/screenshots/).
+
+| | |
+|---|---|
+| **Home** — catalog teaser, brand | ![Home](docs/screenshots/01_home.png) |
+| **Catalog** — browse/search/filter | ![Catalog](docs/screenshots/02_catalog.png) |
+| **Course detail** | ![Course detail](docs/screenshots/03_course_detail.png) |
+| **Dashboard** — grounded AI summary + ranked recommendations | ![Dashboard](docs/screenshots/05_dashboard.png) |
+| **Interest profile + retrieval preview** | ![Profile](docs/screenshots/06_profile.png) |
+| **Register** | ![Register](docs/screenshots/04_register.png) |
+| **Admin: product catalog CRUD** | ![Admin products](docs/screenshots/07_admin_products.png) |
+| **Admin: event debug view** | ![Admin events](docs/screenshots/08_admin_events.png) |
+| **Admin: behavior & recommendations list** | ![Admin recommendations](docs/screenshots/09_admin_recommendations.png) |
+| **Admin: recommendation trace detail** | ![Admin trace](docs/screenshots/10_admin_recommendation_detail.png) |
+| **404 (Stage 18)** — branded, not a bare JSON error | ![404](docs/screenshots/12_404.png) |
+
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the Stage 0 design document: product concept, database/vector schema, dual-write strategy, agentic-workflow decision, the full 20-stage roadmap, and the three demo user journeys used throughout development. Checked in unedited as a historical record of what was decided *before* Stage 1 existed.
+- [`docs/REQUIREMENTS_MAPPING.md`](docs/REQUIREMENTS_MAPPING.md) — every SmartReco 2026 challenge requirement mapped to the real file(s) implementing it, as of Stage 18. Stage 20 (final audit) is the formal sign-off pass over this same list.
+- This README — maintained incrementally every stage since Stage 1, not written retroactively; each stage's section below documents what shipped and, just as importantly, the real bugs/tradeoffs found while building it.
 
 ### Mesh API integration (Stage 9)
 
@@ -276,6 +306,14 @@ A whole-site pass, distinct from Stage 13's narrower dashboard-only polish — t
 
 Live-verified end to end against a real running server + mock Mesh endpoint: unknown routes return a branded HTML 404 (not JSON), `courses/<bad-slug>` still returns its own distinct 404 copy, the homepage serves the favicon and meta description, and — after registering, logging in, and posting a real `view`/`click` event pair to `/api/events` — `/profile` renders "Category affinity" and a "Retrieval preview" section containing the corrected copy (`"not the same list as your dashboard"`) with zero stray `style="..."` attributes besides the one legitimately-dynamic bar-fill width; `/dashboard` and `/admin/recommendations` render with zero inline styles at all.
 
+## README & docs (Stage 19)
+
+Every prior stage already updated this README as it shipped (see the git history — none of the sections above were written retroactively), so Stage 19's job wasn't "write documentation for the first time," it was: make the repo stand on its own for someone who's never seen it before.
+
+- **`docs/ARCHITECTURE.md`** — the Stage 0 planning document, copied into the repo unedited (previously it only existed outside the repo, in the conversation that produced it — a reviewer cloning the GitHub repo had no way to see it). A short note was added at the top pointing at what actually shipped, without touching the original text, so it stays an honest historical record rather than being quietly rewritten to look more accurate in hindsight.
+- **`docs/REQUIREMENTS_MAPPING.md`** — Stage 0 Section 22 sketched a requirement → stage-number table before any code existed; this is that same table filled in against the real, shipped file paths. Stage 20 (final audit) is the formal sign-off pass over this list, not a duplicate of it.
+- **Screenshots.** The Stage 0 roadmap's gate for this stage is explicitly "complete, screenshot-backed." This sandbox has no path to a real headless browser: `playwright install` needs either root (blocked — `sudo` refuses to run under this container's `no-new-privileges` flag) or a direct download from `cdn.playwright.dev`, which the sandbox's network allowlist returns a 403 for. Rather than skip screenshots or fake them, `docs/screenshots/*.png` are generated by actually curling each rendered page from a real running instance of this app (server + a local mock Mesh endpoint) and rasterizing that real HTML/CSS through WeasyPrint (HTML→PDF, pure Python, no browser) + `pdftocairo` (PDF→PNG). Every screenshot is genuine output from `app/templates/` and `main.css` against real seeded data — not a mockup — with the one honest caveat that WeasyPrint's CSS engine isn't pixel-identical to Chromium (no client-side JS execution, and Google Fonts didn't resolve inside the sandbox, so text renders in the system fallback font rather than Inter/Source Serif 4). Documented here rather than silently passed off as a browser screenshot.
+
 ## Running tests
 
 ```bash
@@ -359,6 +397,10 @@ chennai_labs/
 ├── evals/
 │   ├── run_evals.py            # Stage 17: behavioral quality eval harness (not pytest — see README)
 │   └── latest_report.md        # generated by the above; checked in as evidence of the last run
+├── docs/
+│   ├── ARCHITECTURE.md         # Stage 19: the Stage 0 design doc, checked into the repo
+│   ├── REQUIREMENTS_MAPPING.md # Stage 19: challenge requirement -> real file, as-built
+│   └── screenshots/            # Stage 19: real renders of the running app (see "README & docs" above)
 ├── tests/
 ├── requirements.txt
 ├── .env.example
@@ -367,4 +409,4 @@ chennai_labs/
 
 ## Roadmap
 
-This project is built one stage at a time, each requiring explicit approval before moving on. See the Stage 0 architecture document for the full 20-stage roadmap, database/vector design, dual-write strategy, and requirement mapping.
+This project is built one stage at a time, each requiring explicit approval before moving on. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full 20-stage roadmap, database/vector design, dual-write strategy, and requirement mapping — Section 21 of that document is the original stage-by-stage plan; every stage section in this README documents what actually shipped against it.
