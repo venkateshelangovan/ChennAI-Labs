@@ -22,6 +22,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core import rate_limit
 from app.core.config import settings
 from app.db.base import Base, register_models
 from app.db.session import get_db
@@ -30,6 +31,25 @@ from app.retrieval import embeddings as embeddings_module
 from app.retrieval import vector_store as vs_module
 
 register_models()
+
+
+@pytest.fixture(autouse=True)
+def isolated_rate_limits():
+    """
+    Stage 16: `app/core/rate_limit.py` keeps its counters in a
+    module-level dict — process-global, on purpose (see that module's
+    docstring). Every test in this suite runs in the same process, so
+    without resetting it, tests/test_rate_limit.py exhausting a
+    "login"/"register" bucket would leak into whatever other test
+    happens to run next and share that bucket+identifier (e.g. two
+    tests both logging in from the TestClient's default "testclient"
+    IP). Runs before AND after each test — before, so a prior test's
+    leftover state never affects this one; after, for the same reason
+    isolated_vector_store resets on both sides of the yield.
+    """
+    rate_limit.reset_all()
+    yield
+    rate_limit.reset_all()
 
 
 @pytest.fixture(autouse=True)

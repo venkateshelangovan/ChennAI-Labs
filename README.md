@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 15 of 20 (bonus) — a proactive daily digest. An APScheduler job now regenerates every user's `RecommendationSnapshot` once a day (`DIGEST_HOUR_UTC`, default 06:00 UTC), calling the exact same generate-and-persist path `/dashboard` uses in-request, tagged `trigger_reason="scheduled_digest"`. No email/notification infrastructure — see "Proactive digest" below for the scope decision. An admin "Run digest now" button on `/admin/recommendations` triggers it on demand.**
+**Status: Stage 16 of 20 — production hardening. Rate limiting on every endpoint Stage 0 Section 16 called out (`/login`, `/register`, `POST /dashboard/refresh`, `POST /admin/recommendations/run-digest`), a security-headers middleware, session/CSRF cookies that flip to `Secure` in production, a startup check that logs loud warnings for insecure production config, and gzip compression — see "Production hardening" below for the full security/perf review.**
 
 ### Mesh API integration (Stage 9)
 
@@ -209,17 +209,40 @@ Stage 0 Section 15 lists a daily digest as a bonus feature that "delivers" fresh
 
 Live-verified against the real seeded catalog and mock Mesh server: two fresh users' first dashboard visits each produced a `no_snapshot` snapshot (one real Mesh call apiece); clicking "Run digest now" as an admin regenerated both in one request, real `POST /v1/chat/completions` calls hit the mock server for each, both snapshots' `trigger_reason` flipped to `scheduled_digest`, and the redirect showed `2/2 regenerated`. Separately, starting the real app with `uvicorn` (not `TestClient`, so lifespan events actually fire) showed the scheduler registering its cron job and starting cleanly on boot, and a `SIGTERM` showed `apscheduler.scheduler: Scheduler has been shut down` / `chennai_labs.scheduler: scheduler_stopped` logged before the process exited — no orphaned background thread.
 
+## Production hardening (Stage 16)
+
+Stage 0 Section 16 is the security model as originally designed — password hashing, opaque DB-backed sessions, role-check dependencies, ORM-only queries, Jinja2 autoescaping, and CSRF on every state-changing form all shipped starting Stage 2. Two things that section explicitly asked for were still missing through Stage 15: rate limiting, and this stage's actual security/perf review pass. Both are done now.
+
+**Rate limiting — `app/core/rate_limit.py`.** A plain in-process fixed-window counter (`allow(bucket, identifier, limit, window_seconds)`), not Redis-backed — same reasoning as Section 15's caching philosophy applied to a new case: "introduce Redis only if a measured need arises." The honest limitation, stated in the module rather than glossed over: this state is per-process and resets on restart, and would under-count across multiple worker processes or replicas — that specific, concrete scenario (not "might need it someday") is exactly what would justify a shared store later. Wired into every endpoint Section 16 named or that shares the same risk profile:
+
+- `POST /register` — 5 accounts/hour per IP
+- `POST /login` — 10 attempts/5min per IP (blocks even a *correct* password once exhausted — the point of a login rate limit is that it doesn't care whether the blocked attempt would have succeeded)
+- `POST /dashboard/refresh` — 10/hour per user, on top of (not instead of) Stage 12's existing 60-second cooldown; the cooldown is a business rule keyed to a snapshot's own timestamp, the rate limit is a generic, snapshot-independent budget that also covers the case before a snapshot ever existed
+- `POST /admin/recommendations/run-digest` — 3/hour per admin (Stage 15's button spends Mesh budget proportional to the *entire user base* per click, so "cost abuse" applies even though it's admin-gated)
+
+**Security headers.** A new middleware sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin` on every response, plus `Strict-Transport-Security` — but only when `APP_ENV=production`, since HSTS on `http://127.0.0.1` would force the browser to require HTTPS on localhost with no easy per-response undo.
+
+**Cookies now flip to `Secure` in production.** The CSRF cookie (`app/core/csrf.py`) and the session cookie (`app/auth/routes.py`) both hardcoded `secure=False` through Stage 15 ("flip once served over HTTPS"). Both now read `settings.is_production` instead, so nobody has to remember a manual per-deploy edit — while still defaulting to `False` locally, since a `Secure` cookie silently won't round-trip over plain `http://127.0.0.1`.
+
+**Startup config validation.** A new `_validate_production_config` startup hook logs a `WARNING`-level `production_config_warning` line (not a hard failure — a config typo shouldn't turn into a full outage) for each of: `SESSION_SECRET` still at its default insecure value, `MESH_API_KEY` unset, and `DATABASE_URL` still pointing at SQLite — all gated behind `APP_ENV=production`, so local development sees nothing.
+
+**A finding worth stating plainly, not silently fixing:** `session_secret` has been declared in `Settings`/`.env.example` since Stage 1 but no code anywhere reads it. Not an oversight — sessions here are opaque random tokens looked up against the `sessions` table (Stage 0's explicit choice over a signed/JWT session specifically so revocation is "delete the row"), and that design has nothing for a signing secret to sign. Left in place as forward-compatible plumbing rather than deleted, but called out here so it doesn't read as a security control that silently isn't wired up to anything.
+
+**Perf review.** `GZipMiddleware` now compresses responses over 500 bytes — meaningful here specifically because this is a server-rendered app, so most bytes on the wire are Jinja2 HTML output, not JSON. Reviewed the existing index coverage rather than adding anything new: `user_events(user_id, created_at)` and `(session_id, created_at)` back the profile builder's per-user time-window queries (Stage 6), `products(category, status)` and `vector_sync_status` back catalog filtering and the sync-status admin view (Stage 3/4), and every foreign key (`sessions.user_id`, `user_events.product_id`, `recommendation_snapshots.user_id`) is indexed — all already in place from earlier stages' migrations, none newly added here. `RecommendationSnapshot` remains one row per user (Stage 12), so the admin list/detail views and the digest's per-user loop stay O(users), not O(recommendations-ever-generated). The one documented-not-built optimization: `run_daily_digest` processes users sequentially, one Mesh round trip at a time — fine at the current catalog/user scale live-verified against, and a candidate for concurrent Mesh calls (bounded by a semaphore) if digest run time ever becomes a measured problem, per the same "don't build ahead of a measured need" principle used throughout.
+
+Live-verified against the real seeded catalog and mock Mesh server: 11 rapid-fire wrong-password `/login` attempts showed 10 normal "Incorrect email or password" responses followed by "Too many login attempts" on the 11th; 6 rapid `/register` calls showed 5 successful accounts then "Too many registration attempts" on the 6th — both exactly matching their configured budgets. `curl` against a running instance showed `x-content-type-options`, `x-frame-options`, and `referrer-policy` on every response, and `content-encoding: gzip` on `/courses`. Restarting the app with `APP_ENV=production` (default `SESSION_SECRET`, blank `MESH_API_KEY`, SQLite `DATABASE_URL`) logged all three `production_config_warning` lines on boot, showed `strict-transport-security` on `/health`, and showed `Secure` on the CSRF cookie's `Set-Cookie` header.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-180 tests as of Stage 15: Stage 14's 173 plus 7 new — `tests/test_digest.py` covers `run_daily_digest` (skips users with no snapshot, regenerates every user who has one, updates the same row rather than inserting a new one, isolates a single user's failure from the rest of the run) and the admin "Run digest now" action (requires admin, regenerates and redirects with a result summary, a bad CSRF token regenerates nothing).
+198 tests as of Stage 16: Stage 15's 180 plus 18 new — `tests/test_rate_limit.py` covers the fixed-window counter in isolation (allows up to the limit, blocks past it without extending the window, recovers once the window rolls over, independent buckets/identifiers don't interfere), and `tests/test_hardening.py` covers the same behavior wired into real routes (login/register lockout — including that a lockout blocks even a correct password, dashboard-refresh and admin-run-digest hitting their budgets, security headers present on every response, HSTS present only in production, and both cookies' `Secure` flag actually flipping with `settings.is_production`).
 
 ## Environment variables
 
-See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` / `MESH_CHAT_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" and "Recommendation narration" above for what still works without it). `DIGEST_ENABLED` / `DIGEST_HOUR_UTC` (Stage 15) control the proactive daily digest — see "Proactive digest" above. `.env` is git-ignored and must never be committed.
+See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies (see "Production hardening" above for why `SESSION_SECRET` specifically is currently unused); `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` / `MESH_CHAT_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" and "Recommendation narration" above for what still works without it). `DIGEST_ENABLED` / `DIGEST_HOUR_UTC` (Stage 15) control the proactive daily digest — see "Proactive digest" above. `APP_ENV=production` (Stage 16) turns on `Secure` cookies, HSTS, and the startup config validation warnings — see "Production hardening" above. Rate limit budgets (Stage 16) are not environment-configurable; they're small constants next to each route in `app/auth/routes.py` / `app/admin/recommendations_routes.py`, the same way Stage 11's `MIN_CANDIDATES` and Stage 12's `TTL_HOURS` are — tuning knobs a developer would change in code review, not per-deploy. `.env` is git-ignored and must never be committed.
 
 ## Project structure
 
@@ -235,7 +258,8 @@ chennai_labs/
 │   │   ├── csrf.py            # double-submit-cookie CSRF for form posts
 │   │   ├── exceptions.py      # NotAuthenticated / NotAuthorized
 │   │   ├── time.py            # utcnow() — the one clock the whole app uses
-│   │   └── scheduler.py       # Stage 15: APScheduler wiring for the daily digest job
+│   │   ├── scheduler.py       # Stage 15: APScheduler wiring for the daily digest job
+│   │   └── rate_limit.py      # Stage 16: in-process fixed-window rate limiter
 │   ├── db/
 │   │   ├── base.py            # declarative Base + register_models()
 │   │   ├── session.py         # engine, SessionLocal, get_db dependency

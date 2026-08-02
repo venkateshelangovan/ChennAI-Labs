@@ -10,6 +10,7 @@ import logging
 import time
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -37,6 +38,13 @@ logger = logging.getLogger("chennai_labs")
 
 app = FastAPI(title=settings.app_name)
 
+# Stage 16 perf: gzip the responses actually worth compressing — HTML
+# pages (this is a server-rendered app, so most bytes on the wire are
+# Jinja2 output) and the static CSS/JS bundles. `minimum_size` avoids
+# paying compression overhead on tiny responses (e.g. a 20-byte
+# redirect) where gzip's own framing overhead can exceed the savings.
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(auth_router)
@@ -46,6 +54,39 @@ app.include_router(admin_events_router)
 app.include_router(admin_recommendations_router)
 app.include_router(events_router)
 app.include_router(profile_router)
+
+
+@app.on_event("startup")
+def _validate_production_config() -> None:
+    """
+    Stage 16 security review: through Stage 15, a misconfigured
+    production deployment would fail silently (or not fail at all) —
+    e.g. `APP_ENV=production` with the default, publicly-visible-in-
+    this-repo `SESSION_SECRET` still set. This doesn't reject the boot
+    (a hard failure here could turn a config typo into a full outage,
+    which is its own risk), it logs a loud WARNING for each finding so
+    it shows up in whatever the deployment's log aggregator surfaces,
+    and is cheap to grep for before going live. Runs unconditionally in
+    dev/test too (nothing here is expensive), but `is_production` gates
+    every actual finding, so local development never sees noise.
+    """
+    if not settings.is_production:
+        return
+    if settings.session_secret == "dev-only-insecure-secret-change-me":
+        logger.warning(
+            "production_config_warning",
+            extra={"finding": "SESSION_SECRET is still the insecure default value"},
+        )
+    if not settings.mesh_api_key:
+        logger.warning(
+            "production_config_warning",
+            extra={"finding": "MESH_API_KEY is unset — recommendations will run in popularity-fallback only"},
+        )
+    if settings.database_url.startswith("sqlite"):
+        logger.warning(
+            "production_config_warning",
+            extra={"finding": "DATABASE_URL still points at SQLite in production — see README's deployment section"},
+        )
 
 
 @app.on_event("startup")
@@ -90,6 +131,37 @@ async def log_requests(request: Request, call_next):
             "duration_ms": duration_ms,
         },
     )
+    return response
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """
+    Stage 16: defense-in-depth response headers, applied uniformly
+    rather than per-route so nobody has to remember to add them to a
+    new route later.
+
+    - `X-Content-Type-Options: nosniff` — stops a browser from
+      MIME-sniffing a response into executing as something other than
+      its declared Content-Type (relevant for anything user-influenced
+      that ever gets served back, like an uploaded file would be).
+    - `X-Frame-Options: DENY` — this app has no legitimate reason to be
+      framed by another site; blocks clickjacking outright rather than
+      relying on CSP alone.
+    - `Referrer-Policy: strict-origin-when-cross-origin` — a sane
+      modern default; full URLs (which could include a search query in
+      the path) aren't leaked to third-party referrers.
+    - `Strict-Transport-Security` — only set when `is_production`, and
+      deliberately never in dev: HSTS on `http://127.0.0.1` would tell
+      the browser to force HTTPS on localhost, breaking local dev with
+      no easy undo (it's cached by the browser, not just per-response).
+    """
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.is_production:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
 

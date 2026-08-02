@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import service
 from app.auth.dependencies import SESSION_COOKIE_NAME, get_current_user, require_user
+from app.core import rate_limit
 from app.core.config import settings
 from app.core.csrf import issue_csrf_token, set_csrf_cookie, verify_csrf
 from app.db.models.user import User
@@ -25,6 +26,21 @@ from app.recommendations.cache import get_dashboard_recommendations
 from app.templating import templates
 
 router = APIRouter()
+
+# Stage 16: rate limit budgets. Register and login are keyed by client
+# IP (there's no user yet to key by); dashboard/refresh is keyed by
+# user ID (already authenticated, and a more meaningful identity than
+# an IP that could sit behind NAT/a shared proxy). Numbers are
+# deliberately generous relative to genuine use — a real user never
+# submits either auth form more than a handful of times in a session,
+# so anything hitting these limits is, by construction, automated.
+REGISTER_RATE_LIMIT = {"limit": 5, "window_seconds": 3600}  # 5 accounts/hour per IP
+LOGIN_RATE_LIMIT = {"limit": 10, "window_seconds": 300}  # 10 attempts/5min per IP
+REFRESH_RATE_LIMIT = {"limit": 10, "window_seconds": 3600}  # 10 manual refreshes/hour per user
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +71,8 @@ async def register_submit(
 ):
     errors: list[str] = []
 
+    if not rate_limit.allow("register", _client_ip(request), **REGISTER_RATE_LIMIT):
+        errors.append("Too many registration attempts from this location. Please try again later.")
     if not verify_csrf(request, csrf_token):
         errors.append("Your form session expired. Please try again.")
     if len(password) < 8:
@@ -100,6 +118,7 @@ async def register_submit(
         session.token,
         httponly=True,
         samesite="lax",
+        secure=settings.is_production,  # Stage 16: see app/core/csrf.py's set_csrf_cookie for why this is derived, not hardcoded
         max_age=settings.session_ttl_days * 86400,
     )
     return response
@@ -130,6 +149,8 @@ async def login_submit(
     db: Session = Depends(get_db),
 ):
     errors: list[str] = []
+    if not rate_limit.allow("login", _client_ip(request), **LOGIN_RATE_LIMIT):
+        errors.append("Too many login attempts from this location. Please try again in a few minutes.")
     if not verify_csrf(request, csrf_token):
         errors.append("Your form session expired. Please try again.")
 
@@ -159,6 +180,7 @@ async def login_submit(
         session.token,
         httponly=True,
         samesite="lax",
+        secure=settings.is_production,  # Stage 16: see app/core/csrf.py's set_csrf_cookie for why this is derived, not hardcoded
         max_age=settings.session_ttl_days * 86400,
     )
     return response
@@ -226,11 +248,17 @@ async def dashboard_refresh(
     """
     Manual trigger condition (c) from Stage 0 Section 14 — same
     CSRF-protected POST-then-redirect pattern as /admin/products/sync.
-    Rate-limited via trigger.py's cooldown rather than real per-IP/user
-    rate limiting (Stage 16, not built yet) — see that module's
-    docstring for why reusing the snapshot's own timestamp is enough
-    for now.
+
+    Two independent layers of protection, deliberately not merged into
+    one: trigger.py's `manual_refresh_on_cooldown` (Stage 12) is a
+    business rule keyed to THIS snapshot's own `generated_at` — it
+    stops a user from spamming refreshes once a snapshot exists, but
+    has no concept of a request budget and nothing to key off before a
+    snapshot ever existed. `rate_limit.allow` (Stage 16) is a generic,
+    snapshot-independent cap keyed to the user, covering exactly that
+    gap and giving defense in depth even if the cooldown logic ever had
+    a bug.
     """
-    if verify_csrf(request, csrf_token):
+    if verify_csrf(request, csrf_token) and rate_limit.allow("dashboard_refresh", str(user.id), **REFRESH_RATE_LIMIT):
         get_dashboard_recommendations(db, user.id, manual_refresh=True)
     return RedirectResponse(url="/dashboard", status_code=303)

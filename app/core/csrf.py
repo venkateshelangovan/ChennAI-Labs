@@ -28,6 +28,8 @@ import secrets
 from fastapi import Request
 from starlette.responses import Response
 
+from app.core.config import settings
+
 CSRF_COOKIE_NAME = "csrf_token"
 
 
@@ -42,7 +44,13 @@ def set_csrf_cookie(response: Response, token: str) -> None:
         token,
         httponly=True,
         samesite="lax",
-        secure=False,  # flip to True once served over HTTPS in production
+        # Stage 16: was hardcoded False through Stage 15 ("flip once
+        # served over HTTPS"). Tied to settings.is_production instead
+        # of a manual per-deploy edit, so nobody has to remember to
+        # flip it — `secure=True` locally would silently break the
+        # cookie on plain http://127.0.0.1, so this still has to stay
+        # False in local dev, just derived rather than hand-set.
+        secure=settings.is_production,
     )
 
 

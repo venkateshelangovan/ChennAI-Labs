@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Session / security (Stage 2+)
+    # NOTE (Stage 16 security review): `session_secret` is declared and
+    # documented in .env.example, but no code in this repo actually
+    # reads it to sign or encrypt anything. That's not an oversight —
+    # sessions here are opaque random tokens (app/core/security.py's
+    # `generate_session_token`, 32 bytes from `secrets.token_urlsafe`)
+    # looked up against the `sessions` table (Stage 0 Section 16's
+    # explicit choice over a signed/JWT session, specifically because
+    # revocation is then just "delete the row"). A signing secret has
+    # nothing to sign in that design. Kept in Settings/.env.example as
+    # forward-compatible plumbing (e.g. if a future feature needs to
+    # sign a short-lived link, like a password-reset token) rather than
+    # deleted outright, but called out explicitly here — an unused
+    # "secret" sitting in config could otherwise read as a security
+    # control that isn't actually wired up to anything.
     session_secret: str = "dev-only-insecure-secret-change-me"
     session_ttl_days: int = 7  # how long a login stays valid before re-auth is required
 

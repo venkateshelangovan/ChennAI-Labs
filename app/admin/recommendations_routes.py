@@ -34,6 +34,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_admin
+from app.core import rate_limit
 from app.core.config import settings
 from app.core.csrf import issue_csrf_token, set_csrf_cookie, verify_csrf
 from app.db.models.product import Product
@@ -75,6 +76,16 @@ async def list_recommendations(
     return response
 
 
+# Stage 16: this button spends real Mesh budget proportional to the
+# whole user base on every click (unlike /dashboard/refresh, which
+# only ever regenerates one user) — "cost abuse" (Stage 0 Section 16)
+# applies here even more than to the per-user refresh, despite this
+# being admin-only. Keyed by admin ID, not IP, for the same reason as
+# dashboard/refresh: it's a meaningful identity that's already
+# authenticated.
+RUN_DIGEST_RATE_LIMIT = {"limit": 3, "window_seconds": 3600}  # 3 manual runs/hour per admin
+
+
 @router.post("/run-digest")
 async def run_digest_now(
     request: Request,
@@ -82,13 +93,15 @@ async def run_digest_now(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if verify_csrf(request, csrf_token):
+    if not verify_csrf(request, csrf_token):
+        result = "csrf_failed"
+    elif not rate_limit.allow("admin_run_digest", str(admin.id), **RUN_DIGEST_RATE_LIMIT):
+        result = "rate_limited"
+    else:
         summary = run_daily_digest(db)
         result = f"{summary.succeeded}/{summary.total_users} regenerated"
         if summary.failed:
             result += f", {summary.failed} failed"
-    else:
-        result = "csrf_failed"
     return RedirectResponse(url=f"/admin/recommendations?digest_result={result}", status_code=303)
 
 
