@@ -13,18 +13,35 @@ calling back into app/recommendations/cache.py. That's deliberate:
 Section 17 asks for the actual trace of what happened, not a fresh
 answer to "what would happen now" that could differ from what the user
 actually saw.
+
+--- Stage 15: "Run digest now" ---
+
+The proactive digest (app/recommendations/digest.py) otherwise only
+runs once a day off the APScheduler cron job — waiting up to 24 hours
+to see it happen is a bad operational experience and made live
+verification tedious. This mirrors app/admin/routes.py's existing
+"Sync now" button for the vector-store reconciliation sweep: a
+same-page POST, CSRF-protected the same way, that runs the exact
+production function (`run_daily_digest`) synchronously in-request and
+redirects back with a one-line result in the query string. It is
+NOT a second code path — it calls the identical function the scheduler
+calls, so "run it now" and "let it run tonight" are guaranteed to
+behave the same way.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_admin
+from app.core.config import settings
+from app.core.csrf import issue_csrf_token, set_csrf_cookie, verify_csrf
 from app.db.models.product import Product
 from app.db.models.recommendation_snapshot import RecommendationSnapshot
 from app.db.models.user import User
 from app.db.session import get_db
 from app.events import service as events_service
+from app.recommendations.digest import run_daily_digest
 from app.templating import templates
 
 router = APIRouter(prefix="/admin/recommendations")
@@ -33,18 +50,46 @@ RECENT_EVENTS_LIMIT = 30
 
 
 @router.get("")
-async def list_recommendations(request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def list_recommendations(
+    request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db), digest_result: str | None = None
+):
     rows = (
         db.query(RecommendationSnapshot, User)
         .join(User, User.id == RecommendationSnapshot.user_id)
         .order_by(RecommendationSnapshot.generated_at.desc())
         .all()
     )
-    return templates.TemplateResponse(
+    token = issue_csrf_token(request)
+    response = templates.TemplateResponse(
         request,
         "admin/recommendations/index.html",
-        {"rows": rows, "current_user": admin},
+        {
+            "rows": rows,
+            "current_user": admin,
+            "csrf_token": token,
+            "digest_result": digest_result,
+            "digest_hour_utc": settings.digest_hour_utc,
+        },
     )
+    set_csrf_cookie(response, token)
+    return response
+
+
+@router.post("/run-digest")
+async def run_digest_now(
+    request: Request,
+    csrf_token: str = Form(...),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if verify_csrf(request, csrf_token):
+        summary = run_daily_digest(db)
+        result = f"{summary.succeeded}/{summary.total_users} regenerated"
+        if summary.failed:
+            result += f", {summary.failed} failed"
+    else:
+        result = "csrf_failed"
+    return RedirectResponse(url=f"/admin/recommendations?digest_result={result}", status_code=303)
 
 
 @router.get("/{user_id}")

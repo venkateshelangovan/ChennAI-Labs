@@ -170,6 +170,30 @@ def _persist(
     )
 
 
+def regenerate_and_persist(
+    db: Session, user_id: int, *, trigger_reason: str, now: datetime | None = None
+) -> DashboardRecommendations:
+    """
+    The actual "cache miss" work — run the full pipeline (Stage 11
+    retrieval+refinement, Stage 8 novelty/diversity/fallback, Stage 10
+    Mesh narration) and persist the result onto this user's
+    `RecommendationSnapshot`. `get_dashboard_recommendations` uses this
+    for in-request regeneration; `app/recommendations/digest.py` (Stage
+    15) uses the exact same function for the proactive daily job, so
+    there is only one code path that ever writes a snapshot and only
+    one place `trigger_reason` values are invented.
+    """
+    now = now or utcnow()
+    started = time.perf_counter()
+    result = generate_recommendations(db, user_id, now=now)
+    narration = generate_narration(result.recommendations)
+    latency_ms = (time.perf_counter() - started) * 1000
+
+    _persist(db, user_id, now, result, narration, trigger_reason, latency_ms)
+
+    return DashboardRecommendations(result=result, narration=narration, cache_hit=False, trigger_reason=trigger_reason)
+
+
 def get_dashboard_recommendations(
     db: Session, user_id: int, *, manual_refresh: bool = False, now: datetime | None = None
 ) -> DashboardRecommendations:
@@ -189,11 +213,4 @@ def get_dashboard_recommendations(
         # same as a "no_snapshot" cache miss.
         decision = trigger.TriggerDecision(True, "cached_products_gone")
 
-    started = time.perf_counter()
-    result = generate_recommendations(db, user_id, now=now)
-    narration = generate_narration(result.recommendations)
-    latency_ms = (time.perf_counter() - started) * 1000
-
-    _persist(db, user_id, now, result, narration, decision.reason, latency_ms)
-
-    return DashboardRecommendations(result=result, narration=narration, cache_hit=False, trigger_reason=decision.reason)
+    return regenerate_and_persist(db, user_id, trigger_reason=decision.reason, now=now)

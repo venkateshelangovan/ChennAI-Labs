@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     mesh_embedding_model: str = "mesh-embed-v1"
     mesh_chat_model: str = "mesh-chat-v1"
 
+    # Proactive digest (Stage 15) — an APScheduler job, not Celery (Stage
+    # 0, Section 15: nothing here needs distributed queuing). Disabled by
+    # default in the test settings via tests/conftest.py's autouse
+    # fixture, so pytest never spins up a real background thread.
+    digest_enabled: bool = True
+    digest_hour_utc: int = 6  # when the daily digest runs, UTC, 0-23
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"

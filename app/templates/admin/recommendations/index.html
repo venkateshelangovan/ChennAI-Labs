@@ -6,6 +6,20 @@
   <span class="event-total">{{ rows|length }} user{{ "s" if rows|length != 1 else "" }} with a recommendation</span>
 </div>
 
+<div style="margin-bottom:20px; display:flex; align-items:center; gap:14px;">
+  <form method="post" action="/admin/recommendations/run-digest">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <button type="submit">Run digest now</button>
+  </form>
+  {% if digest_result %}
+  <span style="font-size:0.85rem; color:#8a8578;">Last run: {{ digest_result }}</span>
+  {% endif %}
+</div>
+<p style="color:#8a8578; font-size:0.8rem; margin-top:-12px; margin-bottom:20px;">
+  Regenerates every user's recommendation now, same function the scheduled daily digest
+  (Stage 15) calls at {{ "%02d"|format(digest_hour_utc) }}:00 UTC — useful for testing without waiting for the cron.
+</p>
+
 {% if rows %}
 <table class="admin-table">
   <thead>

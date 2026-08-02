@@ -23,6 +23,7 @@ from app.auth.routes import router as auth_router
 from app.core.config import settings
 from app.core.exceptions import NotAuthenticated, NotAuthorized
 from app.core.logging import configure_logging
+from app.core.scheduler import shutdown_scheduler, start_scheduler
 from app.db.session import SessionLocal, get_db
 from app.events.routes import router as events_router
 from app.products import service as product_service
@@ -45,6 +46,27 @@ app.include_router(admin_events_router)
 app.include_router(admin_recommendations_router)
 app.include_router(events_router)
 app.include_router(profile_router)
+
+
+@app.on_event("startup")
+def _start_digest_scheduler() -> None:
+    """
+    Stage 15 (bonus): starts the APScheduler background thread that
+    runs the proactive daily digest (app/recommendations/digest.py).
+    Gated by `settings.digest_enabled` so it can be turned off entirely
+    via env var (e.g. `DIGEST_ENABLED=false`) without touching code —
+    and, deliberately, tests/conftest.py's autouse `no_digest_scheduler`
+    fixture forces this setting off for the whole test suite, so pytest
+    never spins up a real background thread scheduling real DB writes
+    24 hours in the future.
+    """
+    if settings.digest_enabled:
+        start_scheduler()
+
+
+@app.on_event("shutdown")
+def _stop_digest_scheduler() -> None:
+    shutdown_scheduler()
 
 
 @app.middleware("http")

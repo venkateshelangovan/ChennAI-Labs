@@ -33,6 +33,24 @@ register_models()
 
 
 @pytest.fixture(autouse=True)
+def no_digest_scheduler(monkeypatch):
+    """
+    Stage 15: forces `settings.digest_enabled` off for the whole test
+    suite. Empirically, `TestClient(app)` used without a `with` block
+    (as the `client` fixture below does) never fires FastAPI's
+    startup/shutdown events on this FastAPI/Starlette version — verified
+    directly before writing this fixture — so app/main.py's
+    `_start_digest_scheduler` wouldn't run during pytest even without
+    this. This fixture exists anyway as an explicit, version-independent
+    guarantee: if the test client, FastAPI, or this fixture file itself
+    ever changes to use a context manager (matching real ASGI-server
+    behavior more closely), a real APScheduler background thread
+    scheduling real DB writes must still never start during a test run.
+    """
+    monkeypatch.setattr(settings, "digest_enabled", False)
+
+
+@pytest.fixture(autouse=True)
 def isolated_vector_store(tmp_path, monkeypatch):
     """
     Every product create/update/archive/restore now triggers a vector

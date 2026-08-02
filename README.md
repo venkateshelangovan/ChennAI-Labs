@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 14 of 20 — observability is live. Every recommendation generation now writes a full trace (retrieval attempts, the real candidate pool with scores, raw pre-validation Mesh narration output, any rejected citations) onto its `RecommendationSnapshot` row and emits a structured `recommendation_generated` log line — both answer "why did this user get this recommendation" without recomputing anything. `/admin/recommendations` surfaces it per user (Journey 3).**
+**Status: Stage 15 of 20 (bonus) — a proactive daily digest. An APScheduler job now regenerates every user's `RecommendationSnapshot` once a day (`DIGEST_HOUR_UTC`, default 06:00 UTC), calling the exact same generate-and-persist path `/dashboard` uses in-request, tagged `trigger_reason="scheduled_digest"`. No email/notification infrastructure — see "Proactive digest" below for the scope decision. An admin "Run digest now" button on `/admin/recommendations` triggers it on demand.**
 
 ### Mesh API integration (Stage 9)
 
@@ -79,7 +79,7 @@ Then visit:
 - `http://127.0.0.1:8000/dashboard` — protected page; redirects to `/login` if you're not authenticated. As of Stage 8, this is the real "Recommended for you" list from `app/recommendations/service.py`, not a placeholder
 - `http://127.0.0.1:8000/admin/products` — admin catalog management (requires an admin account — see below); redirects non-authenticated visitors to `/login`, returns 403 for a logged-in non-admin. Each row shows a "Vector sync" status (synced/pending/failed); a banner with a "Sync now" button appears if anything needs (re)syncing
 - `http://127.0.0.1:8000/admin/events` — behavioral event debug view (admin-only): every captured view/search/click/category_view/time_spent event, newest first, filterable by type
-- `http://127.0.0.1:8000/admin/recommendations` — behavior & recommendations view (admin-only, Stage 14): every user with a generated recommendation, linking to a per-user full trace (retrieval attempts, candidate pool with scores, raw narration output, rejected citations, recent events)
+- `http://127.0.0.1:8000/admin/recommendations` — behavior & recommendations view (admin-only, Stage 14): every user with a generated recommendation, linking to a per-user full trace (retrieval attempts, candidate pool with scores, raw narration output, rejected citations, recent events); a "Run digest now" button (Stage 15) regenerates every user's recommendation on demand, same function the scheduled daily job calls
 - `http://127.0.0.1:8000/profile` — your own interest profile (requires login): category affinity, top engaged-with courses, topics, and recent searches, plus (Stage 7) a "retrieval preview" showing the exact query text and ranked candidates a similarity search over the catalog returns right now — everything traceable back to the formula that produced it
 
 ## Creating an admin account
@@ -195,17 +195,31 @@ Stage 0 Section 17's ask: "we can answer 'why did this user get this recommendat
 
 Live-verified against the real seeded catalog and mock Mesh server: a personalized user's trace showed real candidate similarities (`79%`, `74%`, `73%`, `73%`, `72%`) pulled straight from that request's actual retrieval. A hallucination scenario (a product retitled to trigger the mock server's citation-`[99]` response, engineered via the real `product_service` write path so novelty exclusion wouldn't strip it from the candidate pool) showed up in the admin trace exactly as it happened: raw Mesh output `"You should definitely check out [99], it's fantastic and not in your list at all."`, fallback reason `ungrounded_citation`, and a `99` pill under "Rejected citations" — none of which ever reached that user's actual dashboard.
 
+## Proactive digest (Stage 15, bonus)
+
+Stage 0 Section 15 lists a daily digest as a bonus feature that "delivers" fresh recommendations to users. A full-document grep found no email/SMTP/notification infrastructure planned anywhere else in the spec — no `smtplib`, no templates, nothing. So "delivers" is scoped narrowly and honestly: this job does **not** send anything to anyone. It regenerates and persists a fresh `RecommendationSnapshot` for every user who already has one, once a day, so the next time they open their dashboard Stage 12's cache serves an already-current recommendation instead of paying generation latency in-request. That is the entire scope — building a real email pipeline here would be inventing a feature the spec never actually describes.
+
+**Why APScheduler, not Celery.** Stage 0 Section 15 explicitly calls the digest out as "APScheduler (digest only)" — the one background job in this whole project that isn't kept synchronous in-request the way the Stage 4 dual-write and Stage 9 Mesh calls are. It's a single cron-scheduled function call once a day, in-process; reaching for Celery would mean standing up a message broker and a separate worker process for a job that runs once every 24 hours.
+
+**`app/recommendations/digest.py` — `run_daily_digest(db, *, now=None)`.** Iterates every user who has an existing `RecommendationSnapshot` (users who've never visited a dashboard are skipped — there's nothing to keep fresh for them), and regenerates+persists each one via `app/recommendations/cache.py`'s `regenerate_and_persist` — the exact same function `/dashboard`'s in-request cache miss calls, just tagged `trigger_reason="scheduled_digest"` instead of `"no_snapshot"`/`"ttl_and_signal"`/etc. There is only one code path that ever writes a snapshot. Each user is wrapped in its own try/except with a `db.rollback()` on failure, so one user's Mesh timeout or data oddity can't abort the run and leave every other user stale; `digest_run_started`/`digest_run_completed` structured log lines report the summary.
+
+**`app/core/scheduler.py`.** A `BackgroundScheduler` (not `AsyncIOScheduler` — the digest job is synchronous SQLAlchemy + synchronous Mesh `httpx` calls end to end, matching every other service module in this codebase, so there's no async loop for it to cooperate with), registered with a daily cron job at `settings.digest_hour_utc`. `app/main.py`'s FastAPI startup/shutdown events start and stop it, gated by `settings.digest_enabled`. `tests/conftest.py`'s autouse `no_digest_scheduler` fixture forces `digest_enabled=False` for the whole test suite — verified directly that `TestClient(app)` used without a `with` block (as the `client` fixture does) never fires FastAPI's lifespan events on this FastAPI/Starlette version, so no real background thread was ever at risk during the 180-test run, but the fixture exists anyway as an explicit, version-independent guarantee.
+
+**"Run digest now."** Waiting up to 24 hours to see the digest run is a bad operational experience, so `/admin/recommendations` got a "Run digest now" button — same CSRF-protected POST-then-redirect pattern as `/admin/products`'s "Sync now," calling `run_daily_digest` synchronously and redirecting back with a one-line result (`"2/2 regenerated"`).
+
+Live-verified against the real seeded catalog and mock Mesh server: two fresh users' first dashboard visits each produced a `no_snapshot` snapshot (one real Mesh call apiece); clicking "Run digest now" as an admin regenerated both in one request, real `POST /v1/chat/completions` calls hit the mock server for each, both snapshots' `trigger_reason` flipped to `scheduled_digest`, and the redirect showed `2/2 regenerated`. Separately, starting the real app with `uvicorn` (not `TestClient`, so lifespan events actually fire) showed the scheduler registering its cron job and starting cleanly on boot, and a `SIGTERM` showed `apscheduler.scheduler: Scheduler has been shut down` / `chennai_labs.scheduler: scheduler_stopped` logged before the process exited — no orphaned background thread.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-173 tests as of Stage 14: Stage 13's suite (162, unchanged from Stage 12 — Stage 13 only extended existing dashboard-rendering assertions with new UI markers) plus 11 covering trace capture and the admin view — every `generate_recommendations` code path populates the trace correctly (cold start, personalized with a real candidate pool, all-candidates-engaged), `generate_narration` records both the grounded and hallucinated raw-output/rejected-citations cases, and the admin routes are access-controlled and render real snapshot/trace data (plus the no-snapshot and unknown-user edge cases). Stage 12 contributed 19 of those 162: `tests/test_trigger.py`'s deterministic decision logic and `tests/test_cache.py`'s call-count assertions proving a cache hit really does skip the expensive pipeline.
+180 tests as of Stage 15: Stage 14's 173 plus 7 new — `tests/test_digest.py` covers `run_daily_digest` (skips users with no snapshot, regenerates every user who has one, updates the same row rather than inserting a new one, isolates a single user's failure from the rest of the run) and the admin "Run digest now" action (requires admin, regenerates and redirects with a result summary, a bad CSRF token regenerates nothing).
 
 ## Environment variables
 
-See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` / `MESH_CHAT_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" and "Recommendation narration" above for what still works without it). `.env` is git-ignored and must never be committed.
+See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` / `MESH_CHAT_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" and "Recommendation narration" above for what still works without it). `DIGEST_ENABLED` / `DIGEST_HOUR_UTC` (Stage 15) control the proactive daily digest — see "Proactive digest" above. `.env` is git-ignored and must never be committed.
 
 ## Project structure
 
@@ -220,7 +234,8 @@ chennai_labs/
 │   │   ├── security.py        # password hashing, session token generation
 │   │   ├── csrf.py            # double-submit-cookie CSRF for form posts
 │   │   ├── exceptions.py      # NotAuthenticated / NotAuthorized
-│   │   └── time.py            # utcnow() — the one clock the whole app uses
+│   │   ├── time.py            # utcnow() — the one clock the whole app uses
+│   │   └── scheduler.py       # Stage 15: APScheduler wiring for the daily digest job
 │   ├── db/
 │   │   ├── base.py            # declarative Base + register_models()
 │   │   ├── session.py         # engine, SessionLocal, get_db dependency
@@ -252,7 +267,8 @@ chennai_labs/
 │   │   ├── narration.py          # Stage 10: LLM summary over an already-final list + grounding validation
 │   │   ├── orchestrator.py       # Stage 11: bounded retrieval quality-gate + refine/retry loop (no LangGraph — see docstring)
 │   │   ├── trigger.py            # Stage 12: deterministic "should this regenerate right now" decision
-│   │   └── cache.py              # Stage 12: serves the persisted RecommendationSnapshot or regenerates + persists
+│   │   ├── cache.py              # Stage 12: serves the persisted RecommendationSnapshot or regenerates + persists
+│   │   └── digest.py             # Stage 15: run_daily_digest — regenerates every user's snapshot proactively
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface, MeshEmbeddingProvider (default) +
 │   │   │                         #   LocalHashEmbeddingProvider (kept as the test suite's stand-in)
