@@ -25,6 +25,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.db.base import Base, register_models
 from app.db.session import get_db
+from app.mesh import client as mesh_client
 from app.retrieval import embeddings as embeddings_module
 from app.retrieval import vector_store as vs_module
 
@@ -77,6 +78,37 @@ def isolated_embedding_provider():
     embeddings_module._provider = embeddings_module.LocalHashEmbeddingProvider()
     yield
     embeddings_module._provider = original
+
+
+@pytest.fixture(autouse=True)
+def no_real_mesh_chat_calls():
+    """
+    Stage 10 wires an LLM-generated narration into /dashboard
+    (app/recommendations/narration.py), which calls mesh_client.chat().
+    Without this fixture, every test that hits GET /dashboard — across
+    tests/test_auth.py and tests/test_recommendations.py, none of which
+    know or care about narration — would attempt a real Mesh chat call.
+
+    Defaults `chat` to raising MeshAPIError, simulating "Mesh chat is
+    unavailable." This isn't an arbitrary stub: it's the exact fallback
+    path every other test implicitly relies on (no narration shown,
+    dashboard renders normally), so this fixture is effectively also
+    continuous regression coverage for that fallback.
+    tests/test_narration.py overrides mesh_client.chat per-test to
+    exercise the success/grounding paths deliberately.
+
+    Same plain-assignment (not monkeypatch) pattern as
+    isolated_embedding_provider, for the same monkeypatch.undo()-safety
+    reason.
+    """
+    original = mesh_client.chat
+
+    def _unavailable(*args, **kwargs):
+        raise mesh_client.MeshAPIError("mesh chat not configured for this test")
+
+    mesh_client.chat = _unavailable
+    yield
+    mesh_client.chat = original
 
 
 @pytest.fixture()

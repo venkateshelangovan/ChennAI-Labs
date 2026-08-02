@@ -741,3 +741,32 @@ a {
 .dashboard-logout {
   margin-top: 40px;
 }
+
+/* Stage 10: recommendation narration */
+
+.narration-card {
+  background: #f3f1fb;
+  border: 1px solid #d9d3f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.narration-card p {
+  margin: 8px 0 0;
+  color: #2E2A72;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.narration-badge {
+  display: inline-block;
+  background: #2E2A72;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 10px;
+  border-radius: 999px;
+}

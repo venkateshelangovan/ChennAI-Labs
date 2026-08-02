@@ -7,6 +7,13 @@
   <p class="subtitle">{{ user.email }} · role: {{ user.role }}</p>
 </div>
 
+{% if narration.text %}
+<div class="narration-card">
+  <span class="narration-badge">AI summary · grounded in the list below</span>
+  <p>{{ narration.text }}</p>
+</div>
+{% endif %}
+
 <div class="home-section-header">
   <h2>Recommended for you</h2>
   <a href="/profile">Why these? See your interest profile →</a>

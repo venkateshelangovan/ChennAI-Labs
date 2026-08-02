@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     mesh_api_key: str = ""
     mesh_base_url: str = "https://api.meshapi.ai/v1"
     mesh_embedding_model: str = "mesh-embed-v1"
+    mesh_chat_model: str = "mesh-chat-v1"
 
     @property
     def is_production(self) -> bool:

@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 9 of 20 — Mesh API integration is live. `get_embedding_provider()` now returns a real, retry-aware Mesh-backed provider; the local hash placeholder only remains as the test suite's stand-in. Grounding validation and the agentic workflow are not built yet.**
+**Status: Stage 10 of 20 — recommendation narration is live. `/dashboard` now shows a short, LLM-generated summary above the recommendation grid, but the LLM is never allowed to decide *what* to recommend — only to write a sentence or two about a list Stage 8's deterministic pipeline already finalized, and every citation it makes is validated before anything reaches the page. The agentic workflow (LangGraph, if it earns its place) is not built yet.**
 
 ### Mesh API integration (Stage 9)
 
@@ -23,6 +23,16 @@ python -m scripts.reindex_all
 ```
 
 **Health check.** `/health`'s `mesh` field reports `"configured"` / `"not_configured"` based on whether an API key is present — it does **not** make a live call to Mesh. Unlike the database and vector store (free, local, cheap to check on every hit), Mesh is an external, metered API; a liveness probe that calls a billed endpoint every few seconds is a known anti-pattern. A missing/unreachable Mesh also never drops the overall status to `503` — the app is genuinely still usable without it (see above).
+
+### Recommendation narration + grounding validation (Stage 10)
+
+`app/mesh/client.py` gains a second method, `chat()`, sharing `embed()`'s retry/backoff/error handling via one extracted `_post()` helper — same contract shape everywhere: `POST {MESH_BASE_URL}/chat/completions` with `{"model", "messages", "temperature"}`, expecting `{"choices": [{"message": {"content": ...}}]}` back.
+
+**The LLM never ranks anything.** `app/recommendations/narration.py` takes Stage 8's already-final `list[Recommendation]` — the deterministic novelty/diversity/cold-start pipeline is completely untouched — and asks Mesh for one short sentence *about* that list, nothing more. The prompt numbers each recommendation (`[1] Course A`, `[2] Course B`, ...) and instructs the model to cite that way when referring to a specific course.
+
+**Grounding validation, not trust.** Every `[N]` citation in the model's response is checked against the actual recommendation count before anything is shown: `_validate_grounding()` extracts every bracketed number via `CITATION_PATTERN` and rejects the whole response if even one citation falls outside `1..len(recommendations)` — a single bad citation invalidates the response, not just the offending sentence, because there's no reliable way to show "half a summary" without risking the reader assuming the missing half was also checked. A response with zero citations is still valid (the model just didn't need to point at anything specific). Passing citations are substituted with the real product title (`[1]` → "Data Structures & Algorithms for MAANG Interviews") before rendering, so the text a user reads never contains raw citation markers.
+
+**Failure is always silent, never broken.** An empty recommendation list, a Mesh outage/error, or a hallucinated out-of-range citation all resolve to the same outcome: `NarrationResult(text=None, grounded=False, fallback_reason=...)`, and `/dashboard` simply doesn't render the narration callout — the recommendation grid itself is entirely unaffected, because narration is generated *after* recommendations are finalized and never gates them. This was live-verified against a local mock Mesh server across all three paths: a grounded response with real citations, a response citing an out-of-range index (rejected, no leak), and a simulated `chat/completions` outage (three retries, then a clean fallback — `/dashboard` still returns `200` with recommendations intact, confirmed from the server log).
 
 ## Stack
 
@@ -132,11 +142,11 @@ Every card on `/dashboard` shows its `reason` — one of two fixed, non-generate
 pytest
 ```
 
-114 tests as of Stage 9: Stage 8's suite (101) plus Mesh integration coverage (13) — the retry-aware client (success, retry-then-succeed on both 5xx and connection errors, retry exhaustion, no-retry on a 4xx or missing API key, malformed response shape, exact request shape), and the embedding-provider wiring (Mesh is the real default, content-hash versioning changes when the schema version does). None of these tests make a real network call — see `tests/conftest.py`'s `isolated_embedding_provider` fixture and `tests/test_mesh_client.py`'s module docstring for how.
+128 tests as of Stage 10: Stage 9's suite (114) plus narration coverage (14) — grounding validation (valid citations, out-of-range citations, zero citations, mixed valid/invalid), the Mesh error and empty-recommendations fallback paths, citation substitution with real product titles, prompt construction, and `/dashboard`'s narration callout rendering (shown when grounded, absent when Mesh is unavailable). None of these tests make a real network call — see `tests/conftest.py`'s `isolated_embedding_provider` and `no_real_mesh_chat_calls` fixtures, and `tests/test_mesh_client.py` / `tests/test_narration.py`'s module docstrings for how.
 
 ## Environment variables
 
-See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" above for what still works without it). `.env` is git-ignored and must never be committed.
+See `.env.example` for the full list with comments. `SESSION_SECRET` and `SESSION_TTL_DAYS` control auth session cookies; `DATABASE_URL` points at your database (SQLite by default); `MESH_API_KEY` / `MESH_BASE_URL` / `MESH_EMBEDDING_MODEL` / `MESH_CHAT_MODEL` configure Mesh (Stage 9+) — leave `MESH_API_KEY` blank for local dev without real credentials (see "Mesh API integration" and "Recommendation narration" above for what still works without it). `.env` is git-ignored and must never be committed.
 
 ## Project structure
 
@@ -178,7 +188,8 @@ chennai_labs/
 │   │   └── routes.py             # GET /profile — the inspectable interest-profile page
 │   ├── recommendations/
 │   │   ├── schemas.py            # Recommendation (wraps a real Product) / RecommendationResult
-│   │   └── service.py            # generate_recommendations — novelty, diversity, popular fallback
+│   │   ├── service.py            # generate_recommendations — novelty, diversity, popular fallback
+│   │   └── narration.py          # Stage 10: LLM summary over an already-final list + grounding validation
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface, MeshEmbeddingProvider (default) +
 │   │   │                         #   LocalHashEmbeddingProvider (kept as the test suite's stand-in)
@@ -186,8 +197,8 @@ chennai_labs/
 │   │   ├── sync.py              # dual-write mechanics: sync/remove/reconcile/detect_drift
 │   │   └── query.py             # Stage 7: profile -> query text -> embedding -> ranked candidates
 │   ├── mesh/
-│   │   └── client.py             # Stage 9: the ONLY module allowed to call an AI provider —
-│   │                              #   retry-aware Mesh HTTP client (embeddings today; LLM calls later)
+│   │   └── client.py             # the ONLY module allowed to call an AI provider —
+│   │                              #   retry-aware Mesh HTTP client: embed() (Stage 9), chat() (Stage 10)
 │   ├── templates/               # Jinja2 (auth/, courses/, admin/products/, admin/events/, profile/, partials/)
 │   └── static/
 │       ├── css/                  # brand tokens + site nav/catalog/admin/profile styling

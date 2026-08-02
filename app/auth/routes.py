@@ -21,6 +21,7 @@ from app.db.models.user import User
 from app.db.session import get_db
 from app.events.schemas import TRACKING_SESSION_COOKIE
 from app.events.service import reconcile_session
+from app.recommendations.narration import generate_narration
 from app.recommendations.service import generate_recommendations
 from app.templating import templates
 
@@ -179,15 +180,21 @@ async def logout(request: Request, db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------------------
 # The logged-in landing page. Originally a placeholder that existed only
-# to prove `require_user` gates access (Stage 2) — Stage 8 replaces that
-# placeholder with the real output of the recommendation pipeline. The
-# gating itself hasn't changed; this route just has something worth
-# gating now.
+# to prove `require_user` gates access (Stage 2) — Stage 8 replaced that
+# placeholder with the real output of the recommendation pipeline, and
+# Stage 10 adds an LLM-generated narration ABOVE it. The recommendation
+# list itself is untouched by the narration step — generate_narration
+# only ever describes an already-final list, and returns text=None on
+# any failure (Mesh unreachable, or a grounding check failure), which
+# the template treats as "don't show a narration," never as an error.
 # ---------------------------------------------------------------------------
 
 @router.get("/dashboard")
 async def dashboard(request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)):
     recommendations = generate_recommendations(db, user.id)
+    narration = generate_narration(recommendations.recommendations)
     return templates.TemplateResponse(
-        request, "dashboard.html", {"user": user, "current_user": user, "recommendations": recommendations}
+        request,
+        "dashboard.html",
+        {"user": user, "current_user": user, "recommendations": recommendations, "narration": narration},
     )

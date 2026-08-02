@@ -18,6 +18,17 @@ import pytest
 from app.core.config import settings
 from app.mesh import client as mesh_client
 
+# Captured at collection time (module import), before any fixture runs —
+# tests/conftest.py's autouse no_real_mesh_chat_calls fixture stubs
+# `mesh_client.chat` to protect unrelated tests (e.g. /dashboard) from
+# making a real call, but the tests in this file exist specifically to
+# exercise the real chat() implementation. Calling this captured
+# reference bypasses that stub entirely (it's a direct reference to the
+# real function object, not a lookup through the module attribute the
+# fixture reassigns) while still exercising the exact same code, so the
+# `httpx`-level mocking below still applies normally.
+_REAL_CHAT = mesh_client.chat
+
 
 class FakeResponse:
     def __init__(self, status_code, json_body=None, text=""):
@@ -157,3 +168,48 @@ def test_embed_raises_on_malformed_response_shape(monkeypatch, no_sleep):
 
     with pytest.raises(mesh_client.MeshAPIError):
         mesh_client.embed("weird response", model="test-model")
+
+
+# ---------------------------------------------------------------------------
+# chat() — Stage 10. Shares _post's retry/backoff/error handling with
+# embed() (already thoroughly covered above), so these focus on what's
+# specific to chat: request shape and response parsing.
+# ---------------------------------------------------------------------------
+
+def test_chat_sends_messages_model_and_temperature(monkeypatch, no_sleep):
+    fake = _install(
+        monkeypatch, lambda *a, **k: FakeResponse(200, {"choices": [{"message": {"content": "hello"}}]})
+    )
+    messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]
+
+    result = _REAL_CHAT(messages, model="test-chat-model", temperature=0.5)
+
+    assert result == "hello"
+    args, kwargs = fake.calls[0]
+    assert args[0] == "https://mesh.test/v1/chat/completions"
+    assert kwargs["json"] == {"model": "test-chat-model", "messages": messages, "temperature": 0.5}
+
+
+def test_chat_defaults_to_low_temperature(monkeypatch, no_sleep):
+    fake = _install(monkeypatch, lambda *a, **k: FakeResponse(200, {"choices": [{"message": {"content": "x"}}]}))
+
+    _REAL_CHAT([{"role": "user", "content": "u"}], model="test-chat-model")
+
+    assert fake.calls[0][1]["json"]["temperature"] == 0.3
+
+
+def test_chat_raises_on_malformed_response_shape(monkeypatch, no_sleep):
+    _install(monkeypatch, lambda *a, **k: FakeResponse(200, {"unexpected": "shape"}))
+
+    with pytest.raises(mesh_client.MeshAPIError):
+        _REAL_CHAT([{"role": "user", "content": "u"}], model="test-chat-model")
+
+
+def test_chat_retries_on_5xx_then_succeeds(monkeypatch, no_sleep):
+    responses = [FakeResponse(500, text="down"), FakeResponse(200, {"choices": [{"message": {"content": "ok"}}]})]
+    fake = _install(monkeypatch, lambda *a, **k: responses.pop(0))
+
+    result = _REAL_CHAT([{"role": "user", "content": "u"}], model="test-chat-model")
+
+    assert result == "ok"
+    assert len(fake.calls) == 2
