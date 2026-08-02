@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 16 of 20 — production hardening. Rate limiting on every endpoint Stage 0 Section 16 called out (`/login`, `/register`, `POST /dashboard/refresh`, `POST /admin/recommendations/run-digest`), a security-headers middleware, session/CSRF cookies that flip to `Secure` in production, a startup check that logs loud warnings for insecure production config, and gzip compression — see "Production hardening" below for the full security/perf review.**
+**Status: Stage 17 of 20 — full test suite + eval framework. 205 pytest tests at 96% coverage, audited line-by-line against Section 18's explicit coverage checklist. New: `evals/run_evals.py`, a separate quality-eval harness (not pytest) that runs Stage 0 Section 23's three demo user journeys against the real pipeline and reports behavioral metrics — category relevance, level-appropriateness, recency-weighting/pivot responsiveness — surfacing one genuine, documented ranking gap in the process. See "Full test suite + eval framework" below.**
 
 ### Mesh API integration (Stage 9)
 
@@ -232,13 +232,44 @@ Stage 0 Section 16 is the security model as originally designed — password has
 
 Live-verified against the real seeded catalog and mock Mesh server: 11 rapid-fire wrong-password `/login` attempts showed 10 normal "Incorrect email or password" responses followed by "Too many login attempts" on the 11th; 6 rapid `/register` calls showed 5 successful accounts then "Too many registration attempts" on the 6th — both exactly matching their configured budgets. `curl` against a running instance showed `x-content-type-options`, `x-frame-options`, and `referrer-policy` on every response, and `content-encoding: gzip` on `/courses`. Restarting the app with `APP_ENV=production` (default `SESSION_SECRET`, blank `MESH_API_KEY`, SQLite `DATABASE_URL`) logged all three `production_config_warning` lines on boot, showed `strict-transport-security` on `/health`, and showed `Secure` on the CSRF cookie's `Set-Cookie` header.
 
+## Full test suite + eval framework (Stage 17)
+
+Two different, deliberately separate things, doing two different jobs — this section covers both.
+
+**1. The pytest suite, audited against Section 18's explicit checklist.** Every stage since Stage 1 has added its own tests as it shipped; Stage 17's job wasn't to write a pile of new ones for their own sake, it was to actually check the coverage claim rather than assume it. Section 18 names eight specific things a real recommendation platform's test suite has to prove; each was checked against the real test files, by name:
+
+- Profile builder correctness on synthetic event sequences — `tests/test_profile.py`
+- Trigger evaluator behavior at exact thresholds — `tests/test_trigger.py`
+- **Grounding validator rejecting a fabricated product ID** ("the single most important test in the system," per Section 18) — `tests/test_narration.py::test_response_with_out_of_range_citation_falls_back`
+- Dual-write behavior under a simulated vector-store failure, `vector_sync_status='failed'`, reconciliation repairs it — `tests/test_retrieval.py::test_vector_store_failure_does_not_fail_sql_write` / `test_reconcile_retries_failed_products_after_outage_ends`
+- Duplicate event submission idempotency — `tests/test_events.py`
+- Empty user history (no crash, sensible empty state, no AI call) — `tests/test_recommendations.py`, `tests/test_admin_recommendations.py::test_cold_start_trace_records_the_path`
+- A synthetically "very active" user (trigger fires, doesn't fire twice for the same signal) — `tests/test_trigger.py`, `tests/test_cache.py`
+- Authentication/authorization on every admin-only route — every `tests/test_admin_*.py` file, plus `tests/test_hardening.py`
+
+All eight were already real, substantive tests — none were missing outright. Two genuine gaps turned up during the audit, not padding for a coverage number:
+
+- **`tests/test_health.py`** built its own module-level `TestClient(app)` instead of using the shared `client` fixture every other test file uses — the only two tests in the whole suite touching the REAL `settings.database_url` file rather than an isolated in-memory database. Worked by accident as long as someone had already migrated that file before running `pytest`, and broke outright under parallel execution (`pytest -n`) once multiple workers touched the same on-disk SQLite file concurrently. Fixed to use the `client` fixture, like everything else.
+- **`app/core/scheduler.py`** (Stage 15) had zero direct test coverage — its startup/shutdown was only ever proven via live verification (a real `uvicorn` process), which is the right way to prove APScheduler itself works, but left as untested: does `start_scheduler()` register the right cron config, is it idempotent, does `shutdown_scheduler()` actually clear state, does `_run_digest_job` close its session even if the digest raises. `tests/test_scheduler.py` (new) covers all of that with a fake `BackgroundScheduler` — no real thread, deterministic, fast.
+
+Ran with `pytest-cov`: **96% line coverage** (1600 statements, 71 missed). The honest remaining gaps, not chased down to 100%: `app/core/scheduler.py`'s and `app/main.py`'s startup/shutdown hook BODIES (never execute under `TestClient`, which doesn't fire FastAPI lifespan events on this stack — proven live instead, same as Stage 15/16); `app/db/session.py`'s real `get_db()` generator (tests use an overridden version by design); a handful of already-covered-at-the-main-path edge branches in `app/admin/routes.py`'s product CRUD forms. Chasing these to 100% would mean testing test infrastructure or duplicating already-proven live verification inside pytest — exactly the kind of coverage-number padding the project's stated anti-over-engineering stance argues against.
+
+**2. `evals/run_evals.py` — a genuinely different kind of check.** pytest proves the pipeline's *code* is correct against exact, hand-picked inputs. It doesn't answer "is this actually a good recommendation system" — whether a RAG-focused user gets RAG-adjacent recommendations, whether a beginner stays at beginner level, whether a mid-journey pivot actually shows up in the next recommendation. This script runs the real pipeline (the same `generate_recommendations` / `generate_narration` every request calls, offline — Stage 4's `LocalHashEmbeddingProvider` standing in for Mesh embeddings, a scripted always-grounded fake standing in for Mesh chat, for the same reason Section 18 keeps Mesh mocked in every test: a repeatable eval has to produce the same report today and next month) against Stage 0 Section 23's three demo journeys, and reports behavioral metrics instead of pass/fail assertions on internal plumbing:
+
+- **Category relevance** (Users A & B): does the interest profile's own dominant category (computed by the real `build_interest_profile`, not eyeballed) actually reach its *true* ceiling in the recommended list — where the ceiling is `min(MAX_PER_CATEGORY, novel candidates actually available in that category)`, read straight off Stage 14's trace data, not just "100% same category" (which Stage 8's diversity cap makes structurally impossible, and would be a worse list if it weren't).
+- **Level appropriateness** (User B): does a beginner-signaled user's recommended list skew beginner/intermediate.
+- **Pivot responsiveness** (User C): generate a recommendation right after one browsing session, then again after a second, topically different session simulated 20 days later (long enough for Stage 6's 14-day recency half-life to matter) — report the category-set Jaccard overlap between the two as evidence recency weighting, not just event count, drove the change.
+- Narration grounding rate and generation latency, aggregated across the run.
+
+Run it: `python -m evals.run_evals` (writes `evals/latest_report.md` and prints the same to stdout). **Latest run: 3 of 4 checks PASS.** The one WARN is a real finding, not a miscalibrated threshold — logged in the report rather than quietly tuned away: Stage 8's diversity re-rank caps how many recommendations share a *category*, but has no concept of *level* at all, so a beginner user's list can still include `advanced`-labeled courses from other categories once their own category's cap is reached (67% non-advanced against the eval's 70% bar). Section 23's stated expectation for User B ("stays beginner/intermediate, explicitly avoiding advanced material") isn't fully met by the current ranker. Not fixed in this stage — Stage 17's job was building the harness that *finds* this kind of gap, not re-opening Stage 8's already-shipped, already-tested ranking logic; it's flagged here as a real follow-up candidate (exclude/penalize `advanced` candidates when a profile's own engaged levels are entirely beginner/intermediate, or add level as a second diversity axis alongside category).
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-198 tests as of Stage 16: Stage 15's 180 plus 18 new — `tests/test_rate_limit.py` covers the fixed-window counter in isolation (allows up to the limit, blocks past it without extending the window, recovers once the window rolls over, independent buckets/identifiers don't interfere), and `tests/test_hardening.py` covers the same behavior wired into real routes (login/register lockout — including that a lockout blocks even a correct password, dashboard-refresh and admin-run-digest hitting their budgets, security headers present on every response, HSTS present only in production, and both cookies' `Secure` flag actually flipping with `settings.is_production`).
+205 tests as of Stage 17: Stage 16's 198 plus 7 new — `tests/test_scheduler.py` (6 tests, closing the coverage gap above) and one added assertion in `tests/test_auth.py` for `verify_password`'s malformed-hash branch (a corrupted DB row should fail closed, not throw a 500). Run with coverage via `pytest --cov=app --cov-report=term-missing` (`pytest-cov`, not in `requirements.txt` — a dev-only tool, not a runtime dependency).
 
 ## Environment variables
 
@@ -311,6 +342,9 @@ chennai_labs/
 │   ├── create_admin.py         # out-of-band admin provisioning
 │   ├── seed_products.py        # realistic starting catalog (idempotent)
 │   └── reindex_all.py          # Stage 9: one-time re-embed-everything migration (provider swap)
+├── evals/
+│   ├── run_evals.py            # Stage 17: behavioral quality eval harness (not pytest — see README)
+│   └── latest_report.md        # generated by the above; checked in as evidence of the last run
 ├── tests/
 ├── requirements.txt
 ├── .env.example

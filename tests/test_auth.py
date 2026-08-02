@@ -30,6 +30,14 @@ def test_verify_password_round_trip():
     assert verify_password("wrong password", hashed) is False
 
 
+def test_verify_password_treats_a_malformed_hash_as_no_match():
+    """Stage 17 coverage gap: a corrupted/truncated hash in the DB
+    (bad migration, manual data fix gone wrong, ...) must fail closed
+    — "doesn't match" — rather than crashing verify_password with a
+    500 the login form has no way to explain to the user."""
+    assert verify_password("anything", "not-a-real-bcrypt-hash") is False
+
+
 # ---------------------------------------------------------------------------
 # app.auth.service — unit level, no HTTP
 # ---------------------------------------------------------------------------
