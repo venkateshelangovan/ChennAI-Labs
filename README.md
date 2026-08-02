@@ -4,7 +4,7 @@
 
 A behavioral AI recommendation platform for a technical learning catalog — DSA/MAANG interview prep, math for ML, and the full applied-AI ladder (ML, DL, NLP, CV, RL, LLMs end-to-end, agentic AI, RAG, fine-tuning, building products). Built for the SmartReco 2026 challenge; see the Stage 0 architecture document for the full design.
 
-**Status: Stage 10 of 20 — recommendation narration is live. `/dashboard` now shows a short, LLM-generated summary above the recommendation grid, but the LLM is never allowed to decide *what* to recommend — only to write a sentence or two about a list Stage 8's deterministic pipeline already finalized, and every citation it makes is validated before anything reaches the page. The agentic workflow (LangGraph, if it earns its place) is not built yet.**
+**Status: Stage 11 of 20 — the retrieval-refinement loop is live, and the LangGraph decision has been made: not yet (see below for why). Stage 7's retrieval now runs through a bounded quality-gate-and-retry loop before Stage 8 ever sees it, still a plain, fully-tested Python function, not graph machinery.**
 
 ### Mesh API integration (Stage 9)
 
@@ -136,13 +136,27 @@ This is explicitly **not** the recommendation engine (Stage 8) — no ranking be
 
 Every card on `/dashboard` shows its `reason` — one of two fixed, non-generated templates ("Matches your recent interest in {category}" or the popularity-fallback explanation), never text written about the user. Compare `/dashboard`'s final list against `/profile`'s raw, unfiltered retrieval preview to see exactly what novelty + diversity changed.
 
+## Agentic workflow — the retrieval-refinement loop, and the LangGraph decision (Stage 11)
+
+The Stage 0 architecture doc deliberately deferred one call to this stage: the pipeline's flowchart has exactly one cyclic edge (retrieve → is the quality acceptable? → no → refine the query and retry), and whether that cyclic decision earns LangGraph or stays a plain Python loop was left an open question until there was a real loop to look at.
+
+**The call: no LangGraph, at least not yet.** `app/recommendations/orchestrator.py` implements the loop as a bounded `for` loop, not a graph. The reasoning, in short: LangGraph earns its keep on multiple interacting branches, multi-agent handoff, or state that needs to survive a process boundary — none of which this workflow has. One conditional retry, capped at `MAX_REFINE_ATTEMPTS` (1), is a 5-line loop, and this codebase's existing structured JSON logging (Stage 0, Section 17) already answers "why did this happen" without a second tracing system. Adding graph machinery ahead of an actual need would repeat the exact anti-pattern this project has already declined for Redis and Celery elsewhere. Full reasoning — including what would change this call later — lives in the module's docstring.
+
+**What "weak retrieval" means.** Two deterministic checks against Stage 7's raw candidates, before Stage 8's novelty/diversity filtering ever runs: fewer than `MIN_CANDIDATES` (5) hits came back at all, or even the single closest candidate's similarity is below `MIN_TOP_SIMILARITY` (0.15). Both are computed on the *raw* pool on purpose — a query that returns plenty of strong matches the user already engaged with isn't a retrieval-quality problem, that's exactly what Stage 8 already handles correctly.
+
+**The refinement itself.** `_narrow_profile` rebuilds the same `InterestProfile` keeping only the single strongest category and tag (both lists are already sorted by score), dropping top-product titles and search terms entirely. Every token in the retried query still comes from the user's real profile — narrowing just removes the low-weight noise that can dilute a real signal in Stage 7's query-text synthesis, without inventing anything.
+
+**Bounded, and always safe.** After `MAX_REFINE_ATTEMPTS`, the orchestrator hands off whichever attempt scored better (more candidates, then higher top similarity) rather than looping indefinitely. Stage 8's own fallback logic downstream is untouched and still runs on whatever comes back — Stage 11's job is only to give the deterministic pipeline the best shot at a real result, never to guarantee one exists. `RecommendationResult.retrieval_refined` surfaces whether refinement fired, for observability.
+
+Live-verified against the real seeded catalog and a mock Mesh server: a normal user's retrieval passed the quality gate on the first attempt (`quality_ok: true`, no refinement — the 16-course catalog is comfortably above the bar). To exercise the refine path itself, the catalog was temporarily thinned to 3 active courses via the real `archive_product` path (proper dual-write, not a raw SQL shortcut): the first attempt logged `too_few_candidates`, `retrieval_refining` fired, the narrowed retry still logged `too_few_candidates` (3 active courses can never clear a floor of 5, no matter how the query is narrowed), and the loop stopped at the bound — `/dashboard` still returned `200` with recommendations rendered, exactly the "give up gracefully, never break" behavior this stage was built to guarantee.
+
 ## Running tests
 
 ```bash
 pytest
 ```
 
-128 tests as of Stage 10: Stage 9's suite (114) plus narration coverage (14) — grounding validation (valid citations, out-of-range citations, zero citations, mixed valid/invalid), the Mesh error and empty-recommendations fallback paths, citation substitution with real product titles, prompt construction, and `/dashboard`'s narration callout rendering (shown when grounded, absent when Mesh is unavailable). None of these tests make a real network call — see `tests/conftest.py`'s `isolated_embedding_provider` and `no_real_mesh_chat_calls` fixtures, and `tests/test_mesh_client.py` / `tests/test_narration.py`'s module docstrings for how.
+143 tests as of Stage 11: Stage 10's suite (128) plus 15 covering the retrieval-refinement loop — the quality gate and query-narrowing as pure functions (`tests/test_orchestrator.py`), the orchestration logic itself with a stubbed `retrieve_for_profile` (refines exactly when it should, stops at the bound, keeps the better of two weak attempts, skips refinement for a cold-start result), and two end-to-end integration tests against the real (test-isolated) vector store proving both paths — a thin catalog genuinely triggers refinement, a rich one genuinely doesn't.
 
 ## Environment variables
 
@@ -189,7 +203,8 @@ chennai_labs/
 │   ├── recommendations/
 │   │   ├── schemas.py            # Recommendation (wraps a real Product) / RecommendationResult
 │   │   ├── service.py            # generate_recommendations — novelty, diversity, popular fallback
-│   │   └── narration.py          # Stage 10: LLM summary over an already-final list + grounding validation
+│   │   ├── narration.py          # Stage 10: LLM summary over an already-final list + grounding validation
+│   │   └── orchestrator.py       # Stage 11: bounded retrieval quality-gate + refine/retry loop (no LangGraph — see docstring)
 │   ├── retrieval/
 │   │   ├── embeddings.py        # EmbeddingProvider interface, MeshEmbeddingProvider (default) +
 │   │   │                         #   LocalHashEmbeddingProvider (kept as the test suite's stand-in)

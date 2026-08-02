@@ -32,6 +32,7 @@ class RecommendationResult:
     generated_at: datetime
     strategy: str  # "personalized" | "popular_fallback"
     recommendations: list[Recommendation] = field(default_factory=list)
+    retrieval_refined: bool = False  # Stage 11: did the quality-gate loop have to narrow the query and retry?
 
     @property
     def is_personalized(self) -> bool:

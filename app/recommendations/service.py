@@ -36,6 +36,16 @@ about the candidate (its own category) or an honest statement that
 there isn't enough data yet. Nothing here writes prose *about* the
 user; that's exactly the kind of claim only a real language model
 (Stage 9+, and even then carefully) should be trusted to make.
+
+Stage 11 inserts one thing ahead of novelty/diversity: Stage 7's raw
+retrieval now goes through `app/recommendations/orchestrator.py`'s
+bounded quality-gate-and-refine loop before this function ever sees it.
+Nothing below this point changed to accommodate that — `outcome.result`
+is a plain `RetrievalResult`, exactly what `retrieve_for_profile`
+always returned, so novelty/diversity/fallback logic didn't need to
+know refinement happened at all. See that module's docstring for the
+full design (what "weak retrieval" means, the refinement strategy, and
+why this stayed a plain Python loop instead of adopting LangGraph).
 """
 
 from __future__ import annotations
@@ -49,8 +59,8 @@ from app.core.time import utcnow
 from app.db.models.product import Product
 from app.db.models.user_event import UserEvent
 from app.profile.service import build_interest_profile
+from app.recommendations.orchestrator import retrieve_with_refinement
 from app.recommendations.schemas import Recommendation, RecommendationResult
-from app.retrieval.query import retrieve_for_profile
 
 DEFAULT_TOP_N = 6
 CANDIDATE_POOL_SIZE = 30  # fetched from the vector store — more than top_n so novelty + diversity have room to filter
@@ -147,7 +157,8 @@ def generate_recommendations(
     if profile.is_cold_start:
         return _popular_fallback(db, user_id=user_id, now=now, top_n=top_n)
 
-    retrieval = retrieve_for_profile(db, profile, top_k=CANDIDATE_POOL_SIZE)
+    outcome = retrieve_with_refinement(db, profile, top_k=CANDIDATE_POOL_SIZE)
+    retrieval = outcome.result
     if not retrieval.candidates:
         return _popular_fallback(db, user_id=user_id, now=now, top_n=top_n)
 
@@ -180,5 +191,9 @@ def generate_recommendations(
         )
 
     return RecommendationResult(
-        user_id=user_id, generated_at=now, strategy="personalized", recommendations=recommendations
+        user_id=user_id,
+        generated_at=now,
+        strategy="personalized",
+        recommendations=recommendations,
+        retrieval_refined=outcome.refined,
     )

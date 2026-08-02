@@ -167,6 +167,42 @@ def test_recommendations_respect_diversity_cap_end_to_end(db_session):
 
 
 # ---------------------------------------------------------------------------
+# Stage 11 — retrieval-quality gate + refinement, wired through this
+# end-to-end pipeline (unit coverage of the gate/refine logic itself is
+# in tests/test_orchestrator.py; these confirm it's really connected).
+# ---------------------------------------------------------------------------
+
+def test_thin_catalog_triggers_retrieval_refinement(db_session):
+    # Every catalog in this file's other tests is well under
+    # orchestrator.MIN_CANDIDATES (5) on purpose, for deterministic
+    # assertions on exactly which candidates come back — which makes
+    # this a real, not contrived, demonstration of the "too few
+    # candidates" refinement path actually firing end to end.
+    engaged = _make_product(db_session, title="Engaged Course", category="Robotics Engineering")
+    _make_product(db_session, title="Culinary Basics", category="Culinary Arts")
+    _insert_view_event(db_session, user_id=1, product_id=engaged.id, created_at=NOW)
+
+    result = reco_service.generate_recommendations(db_session, user_id=1, top_n=6, now=NOW)
+
+    assert result.strategy == "personalized"
+    assert result.retrieval_refined is True
+
+
+def test_rich_catalog_does_not_need_refinement(db_session):
+    from app.recommendations import orchestrator as orch
+
+    engaged = _make_product(db_session, title="Robotics Engaged", category="Robotics Engineering")
+    for i in range(orch.MIN_CANDIDATES + 2):
+        _make_product(db_session, title=f"Robotics Engineering Course {i}", category="Robotics Engineering")
+    _insert_view_event(db_session, user_id=1, product_id=engaged.id, created_at=NOW)
+
+    result = reco_service.generate_recommendations(db_session, user_id=1, top_n=6, now=NOW)
+
+    assert result.strategy == "personalized"
+    assert result.retrieval_refined is False
+
+
+# ---------------------------------------------------------------------------
 # HTTP layer — /dashboard
 # ---------------------------------------------------------------------------
 
